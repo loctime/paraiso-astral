@@ -1,24 +1,211 @@
 // ===== PARAÍSO ASTRAL - APP.JS =====
 
-// ── ROUTER ──────────────────────────────────────────────────────────────────
-function navigate(pageId, data) {
-  // Navegación simple sin Store
-  console.log('Navegando a:', pageId, data);
+// ── ROUTE GUARD ──────────────────────────────────────────────────────────────────
+/**
+ * Check if current route requires authentication
+ * @param {string} pageId - Current page ID
+ * @returns {boolean} True if route is protected
+ */
+function isProtectedRoute(pageId) {
+  return window.CONFIG.PROTECTED_ROUTES.includes(pageId);
+}
+
+/**
+ * Check if user can access current route
+ * @param {string} pageId - Current page ID
+ * @returns {boolean} True if user can access route
+ */
+function canAccessRoute(pageId) {
+  // Public routes are always accessible
+  if (window.CONFIG.PUBLIC_ROUTES.includes(pageId)) {
+    return true;
+  }
   
-  // Actualizar UI
+  // Protected routes require authentication
+  if (isProtectedRoute(pageId)) {
+    return window.Auth.isAuthenticated();
+  }
+  
+  return true;
+}
+
+/**
+ * Enhanced navigate function with route protection
+ * @param {string} pageId - Target page ID
+ * @param {any} data - Optional data for page
+ */
+function navigate(pageId, data) {
+  // Check route protection
+  if (!canAccessRoute(pageId)) {
+    // Redirect to login with return URL
+    window.location.hash = `#login?return=${encodeURIComponent(pageId)}`;
+    return;
+  }
+  
+  // Original navigation logic
+  // Update UI
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const page = document.getElementById('page-' + pageId);
-  if (page) { page.classList.add('active'); page.querySelector('.page-content').scrollTop = 0; }
+  if (page) { 
+    page.classList.add('active'); 
+    const content = page.querySelector('.page-content');
+    if (content) content.scrollTop = 0; 
+  }
+  
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const navItem = document.querySelector(`[data-nav="${pageId}"]`);
   if (navItem) navItem.classList.add('active');
   
-  // Renderizar página específica
+  // Render page-specific content
   if (data) {
     if (pageId === 'event-detail') { renderEventDetail(data); }
     if (pageId === 'artist-detail') { renderArtistDetail(data); }
     if (pageId === 'rrpp-detail') { renderRRPPDetail(data); }
     if (pageId === 'tickets') { renderTicketsPage(data); }
+  }
+}
+
+// ── ERROR HANDLING ──────────────────────────────────────────────────────────────────
+/**
+ * Global error handler
+ * @param {string} message - Error message
+ * @param {string} type - Error type
+ */
+function globalErrorHandler(message, type = 'error') {
+  const icons = {
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️'
+  };
+  
+  const icon = icons[type] || icons.error;
+  toast(`${icon} ${message}`);
+}
+
+/**
+ * Initialize error handling
+ */
+function initializeErrorHandling() {
+  // Set global error handler in ApiClient
+  if (window.ApiClient && window.ApiClient.setErrorHandler) {
+    window.ApiClient.setErrorHandler(globalErrorHandler);
+  }
+  
+  // Handle unhandled promise rejections
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled promise rejection:', event.reason);
+    globalErrorHandler('Error inesperado en la aplicación', 'error');
+  });
+  
+  // Handle global errors
+  window.addEventListener('error', (event) => {
+    console.error('Global error:', event.error);
+    globalErrorHandler('Error inesperado en la aplicación', 'error');
+  });
+}
+
+// ── LOADING STATES ──────────────────────────────────────────────────────────────────
+/**
+ * Show loading state for a container
+ * @param {HTMLElement} container - Container element
+ * @param {string} message - Loading message
+ */
+function showLoading(container, message = 'Cargando...') {
+  if (!container) return;
+  
+  container.innerHTML = `
+    <div style="text-align:center;padding:2rem">
+      <div style="font-size:2rem;animation:spin 1s linear infinite">🔄</div>
+      <div style="margin-top:1rem;color:var(--text-muted)">${message}</div>
+    </div>
+  `;
+}
+
+/**
+ * Show error state for a container
+ * @param {HTMLElement} container - Container element
+ * @param {string} message - Error message
+ * @param {Function} retryCallback - Optional retry callback
+ */
+function showErrorState(container, message, retryCallback = null) {
+  if (!container) return;
+  
+  const retryButton = retryCallback ? 
+    `<button class="btn btn-primary" style="margin-top:1.5rem" onclick="(${retryCallback})()">🔄 Reintentar</button>` : '';
+  
+  container.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">⚠️</div>
+      <div class="empty-title">${message}</div>
+      ${retryButton}
+    </div>
+  `;
+}
+
+// ── INITIALIZATION ──────────────────────────────────────────────────────────────────
+/**
+ * Initialize application
+ */
+function initializeApp() {
+  // Initialize error handling
+  initializeErrorHandling();
+  
+  // Handle URL hash for initial navigation
+  handleInitialRoute();
+  
+  // Setup form listeners
+  setupFormListeners();
+  
+  // Check auth state after a short delay
+  setTimeout(() => {
+    if (!window.Auth.isAuthenticated()) {
+      navigate('login');
+    } else {
+      navigate('home');
+    }
+  }, 100);
+}
+
+/**
+ * Handle initial route from URL hash
+ */
+function handleInitialRoute() {
+  const hash = window.location.hash.slice(1); // Remove #
+  if (!hash) return;
+  
+  const [page, ...params] = hash.split('?');
+  const queryParams = params.length > 0 ? params.join('?') : '';
+  
+  if (page) {
+    // Handle return URL from login redirect
+    if (page === 'login' && queryParams) {
+      const urlParams = new URLSearchParams(queryParams);
+      const returnTo = urlParams.get('return');
+      if (returnTo) {
+        // Store return URL for after login
+        sessionStorage.setItem('returnTo', returnTo);
+        return;
+      }
+    }
+    
+    navigate(page);
+  }
+}
+
+/**
+ * Setup form listeners
+ */
+function setupFormListeners() {
+  // Login form
+  const loginForm = document.getElementById('login-form');
+  if (loginForm) {
+    loginForm.addEventListener('submit', handleLogin);
+  }
+  
+  // Register form
+  const registerForm = document.getElementById('register-form');
+  if (registerForm) {
+    registerForm.addEventListener('submit', handleRegister);
   }
 }
 
@@ -34,38 +221,57 @@ function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
 // ── HOME PAGE ────────────────────────────────────────────────────────────────
-function renderHome() {
-  // Usar DATABASE directamente para obtener datos
-  const featured = DATABASE.events.find(e => e.status === 'featured') || DATABASE.events[0];
-  const liveEvent = DATABASE.events.find(e => e.status === 'live');
-  const upcomingEvents = DATABASE.events.filter(e => e.status === 'upcoming').slice(0, 3);
-  const recentNews = DATABASE.news ? DATABASE.news.slice(0, 4) : [];
-  
+async function renderHome() {
   const el = document.getElementById('page-home');
   const content = el.querySelector('.page-content');
+  
+  // Show loading state
+  showLoading(content, 'Cargando eventos...');
+  
+  try {
+    // Fetch events from backend
+    const events = await window.ApiClient.get('/api/events');
+    
+    if (!events || events.length === 0) {
+      showErrorState(content, 'No hay eventos disponibles');
+      return;
+    }
+    
+    // Find featured, live, and upcoming events
+    const featured = events.find(e => e.status === 'featured') || events[0];
+    const liveEvent = events.find(e => e.status === 'live');
+    const upcomingEvents = events.filter(e => e.status === 'upcoming').slice(0, 3);
+    
+    // Mock news for now (can be replaced with real news API later)
+    const recentNews = [
+      { id: 1, emoji: '🎛️', category: 'Producción', title: 'Mastering para frecuencias cósmicas' },
+      { id: 2, emoji: '⭐', category: 'Nuevo Artista', title: 'Introduciendo a Nebula Void' },
+      { id: 3, emoji: '🌍', category: 'Tour', title: 'European Astral Tour 2025' },
+      { id: 4, emoji: '🔊', category: 'Festival', title: 'Nuevo stage en Supernova Festival' }
+    ].slice(0, 4);
 
-  content.innerHTML = `
+    content.innerHTML = `
     ${liveEvent ? `
-    <div style="background:rgba(255,0,64,0.1);border:1px solid rgba(255,0,64,0.3);border-radius:var(--radius-lg);padding:0.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:0.75rem;cursor:pointer;" onclick="navigate('event-detail', ${liveEvent.id})">
+    <div style="background:rgba(255,0,64,0.1);border:1px solid rgba(255,0,64,0.3);border-radius:var(--radius-lg);padding:0.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:0.75rem;cursor:pointer;" onclick="navigate('event-detail', '${liveEvent.id}')">
       <span style="font-size:1.2rem;animation:pulse-live 1.5s infinite">🔴</span>
-      <div style="flex:1"><div style="font-weight:700;font-size:0.85rem">${liveEvent.title}</div><div style="font-size:0.75rem;color:var(--text-muted)">${liveEvent.venue} · LIVE AHORA</div></div>
+      <div style="flex:1"><div style="font-weight:700;font-size:0.85rem">${window.ApiClient.sanitizeHTML(liveEvent.title)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${window.ApiClient.sanitizeHTML(liveEvent.venue || 'Venue')} · LIVE AHORA</div></div>
       <span class="badge badge-live">LIVE</span>
     </div>` : ''}
 
     ${featured ? `
-    <div class="hero fade-in" onclick="navigate('event-detail', ${featured.id})">
-      <div class="hero-placeholder star-bg">${featured.flyer}</div>
+    <div class="hero fade-in" onclick="navigate('event-detail', '${featured.id}')">
+      <div class="hero-placeholder star-bg">${window.ApiClient.sanitizeHTML(featured.flyer || '🌌')}</div>
       <div class="hero-overlay"></div>
       <div class="hero-content">
         <span class="badge badge-primary" style="margin-bottom:0.5rem">Evento Destacado</span>
-        <h2 class="hero-title">${featured.title}</h2>
-        <p class="hero-sub">${featured.month} ${featured.day} • ${featured.venue}</p>
+        <h2 class="hero-title">${window.ApiClient.sanitizeHTML(featured.title)}</h2>
+        <p class="hero-sub">${new Date(featured.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} • ${window.ApiClient.sanitizeHTML(featured.venue || 'Venue')}</p>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1rem">
           <div class="avatar-row">
-            ${featured.lineup.slice(0,3).map((a,i) => `<div class="avatar" style="background:hsl(${280+i*30},60%,40%);font-size:0.7rem;display:flex;align-items:center;justify-content:center">${a[0]}</div>`).join('')}
-            <div class="avatar avatar-count">+${Math.max(0,featured.lineup.length-3)}</div>
+            ${(featured.lineup || []).slice(0,3).map((a,i) => `<div class="avatar" style="background:hsl(${280+i*30},60%,40%);font-size:0.7rem;display:flex;align-items:center;justify-content:center">${window.ApiClient.sanitizeHTML((a || '')[0] || '🎵')}</div>`).join('')}
+            <div class="avatar avatar-count">+${Math.max(0,(featured.lineup || []).length-3)}</div>
           </div>
-          <button class="btn btn-primary" style="padding:0.6rem 1.2rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('tickets',${featured.id})">🎫 Entradas</button>
+          <button class="btn btn-primary" style="padding:0.6rem 1.2rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('tickets','${featured.id}')">🎫 Entradas</button>
         </div>
       </div>
     </div>` : ''}
@@ -76,10 +282,10 @@ function renderHome() {
     </div>
     <div class="h-scroll">
       ${recentNews.map(n => `
-        <div style="min-width:140px;cursor:pointer" onclick="navigate('news-detail',${n.id})">
-          <div style="height:160px;border-radius:var(--radius-lg);background:linear-gradient(135deg,#1a0820,#2d0040);display:flex;align-items:center;justify-content:center;font-size:2.5rem;margin-bottom:0.5rem;border:1px solid var(--border)">${n.emoji}</div>
-          <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--primary);margin-bottom:0.2rem">${n.category}</div>
-          <div style="font-size:0.82rem;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${n.title}</div>
+        <div style="min-width:140px;cursor:pointer" onclick="navigate('news-detail','${n.id}')">
+          <div style="height:160px;border-radius:var(--radius-lg);background:linear-gradient(135deg,#1a0820,#2d0040);display:flex;align-items:center;justify-content:center;font-size:2.5rem;margin-bottom:0.5rem;border:1px solid var(--border)">${window.ApiClient.sanitizeHTML(n.emoji)}</div>
+          <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--primary);margin-bottom:0.2rem">${window.ApiClient.sanitizeHTML(n.category)}</div>
+          <div style="font-size:0.82rem;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${window.ApiClient.sanitizeHTML(n.title)}</div>
         </div>`).join('')}
     </div>
 
@@ -100,6 +306,11 @@ function renderHome() {
       <button class="icon-btn" onclick="toast('▶️ Reproduciendo...')">▶️</button>
     </div>
   `;
+  
+  } catch (error) {
+    console.error('Error loading home:', error);
+    showErrorState(content, 'Error al cargar eventos', 'renderHome');
+  }
 }
 
 function renderEventCardMini(e) {
@@ -118,16 +329,11 @@ function renderEventCardMini(e) {
 }
 
 // ── EVENTS PAGE ──────────────────────────────────────────────────────────────
-function renderEvents(filter = 'upcoming') {
+async function renderEvents(filter = 'upcoming') {
   const el = document.getElementById('page-events');
   const content = el.querySelector('.page-content');
-  // Usar DATABASE directamente para obtener eventos
-  const events = DATABASE.events.filter(e => {
-    if (filter === 'past') return new Date(e.date) < new Date();
-    if (filter === 'live') return e.status === 'live';
-    return e.status === 'upcoming';
-  });
-
+  
+  // Show loading state
   content.innerHTML = `
     <div class="tabs">
       <div class="tab ${filter === 'upcoming' ? 'active' : ''}" onclick="renderEvents('upcoming')">Próximos</div>
@@ -143,41 +349,63 @@ function renderEvents(filter = 'upcoming') {
     ${renderCalendar()}
 
     <div id="events-list">
-      ${events.length === 0 ? '<div class="empty-state"><div class="empty-icon">🌌</div><div class="empty-title">Sin eventos</div></div>' :
-        events.map(e => renderEventCardFull(e)).join('')}
+      <div style="text-align:center;padding:2rem"><div style="font-size:2rem">🔄</div><div style="margin-top:1rem;color:var(--text-muted)">Cargando eventos...</div></div>
     </div>
   `;
+  
+  try {
+    // Fetch events from backend
+    const events = await window.ApiClient.get('/api/events');
+    
+    if (!events || events.length === 0) {
+      document.getElementById('events-list').innerHTML = '<div class="empty-state"><div class="empty-icon">🌌</div><div class="empty-title">Sin eventos</div></div>';
+      return;
+    }
+    
+    // Filter events based on status
+    const filteredEvents = events.filter(e => {
+      if (filter === 'past') return new Date(e.startAt) < new Date();
+      if (filter === 'live') return e.status === 'live';
+      return e.status === 'upcoming';
+    });
+
+    document.getElementById('events-list').innerHTML = filteredEvents.length === 0 ? 
+      '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos</div></div>' :
+        filteredEvents.map(e => renderEventCardFull(e)).join('');
+    
+  } catch (error) {
+    console.error('Error loading events:', error);
+    document.getElementById('events-list').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <div class="empty-title">Error al cargar eventos</div>
+        <button class="btn btn-primary" style="margin-top:1.5rem" onclick="renderEvents('${filter}')">🔄 Reintentar</button>
+      </div>
+    `;
+  }
 }
 
 function renderCalendar() {
-  // Valores por defecto sin Store
+  // Simplified calendar without DATABASE dependency
   const year = 2024;
   const month = 9;
   const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
-  // Usar DATABASE para eventos del calendario
-  const eventDays = DATABASE.events
-    .filter(e => {
-      const eventDate = new Date(e.date);
-      return eventDate.getFullYear() === year && eventDate.getMonth() === month;
-    })
-    .map(e => new Date(e.date).getDate());
 
   let cells = '';
   for (let i = 0; i < firstDay; i++) cells += `<div class="cal-day other-month">${new Date(year, month, -firstDay + i + 1).getDate()}</div>`;
   for (let d = 1; d <= daysInMonth; d++) {
-    const hasEv = eventDays.includes(d);
     const isToday = d === 4 && month === 9;
-    cells += `<div class="cal-day ${hasEv ? 'has-event' : ''} ${isToday ? 'active' : ''}" onclick="filterEventsByDay(${d})">${d}</div>`;
+    cells += `<div class="cal-day ${isToday ? 'active' : ''}" onclick="renderEvents()">${d}</div>`;
   }
 
   return `
     <div class="glass-card" style="padding:1rem;margin-bottom:1.2rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
-        <button class="icon-btn" style="width:32px;height:32px" onclick="changeCalMonth(-1)">‹</button>
+        <button class="icon-btn" style="width:32px;height:32px" onclick="renderEvents()">‹</button>
         <span class="font-display" style="font-size:0.85rem;font-weight:700">${monthNames[month]} ${year}</span>
-        <button class="icon-btn" style="width:32px;height:32px" onclick="changeCalMonth(1)">›</button>
+        <button class="icon-btn" style="width:32px;height:32px" onclick="renderEvents()">›</button>
       </div>
       <div class="calendar-grid">
         ${['D','L','M','X','J','V','S'].map(d => `<div class="cal-day-header">${d}</div>`).join('')}
@@ -187,27 +415,53 @@ function renderCalendar() {
 }
 
 function changeCalMonth(dir) {
-  // Sin Store por ahora
+  // Simplified month change without DATABASE dependency
   renderEvents();
 }
 
 function filterEventsByDay(day) {
-  const year = 2024;
-  const month = 9;
-  const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-  const filtered = DATABASE.events.filter(e => e.date === dateStr);
-  const list = document.getElementById('events-list');
-  if (list) list.innerHTML = filtered.length === 0 ? '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos este día</div></div>' : filtered.map(e => renderEventCardFull(e)).join('');
+  // Simplified day filtering without DATABASE dependency
+  renderEvents();
 }
 
 function filterEvents(query) {
-  const filtered = DATABASE.events.filter(e => 
-    e.title.toLowerCase().includes(query.toLowerCase()) ||
-    e.venue.toLowerCase().includes(query.toLowerCase()) ||
-    e.lineup.some(artist => artist.toLowerCase().includes(query.toLowerCase()))
-  );
-  const list = document.getElementById('events-list');
-  if (list) list.innerHTML = filtered.length === 0 ? '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Sin resultados</div></div>' : filtered.map(e => renderEventCardFull(e)).join('');
+  // This will be implemented with real API filtering
+  // For now, just re-render events
+  renderEvents();
+}
+
+// ===== RBAC TEST FUNCTION =====
+
+/**
+ * Test protected RBAC endpoint
+ */
+async function testRBAC() {
+  try {
+    toast('🔄 Probando endpoint protegido...');
+    
+    // Test with a sample organization ID (you may need to adjust this)
+    const orgId = 'sample-org-id';
+    
+    const result = await window.ApiClient.get(`/api/orgs/${orgId}/test`);
+    
+    toast('✅ Acceso concedido a endpoint protegido');
+    
+    // Show result in a modal or alert
+    alert(`RBAC Test Exitoso:\n\nUsuario: ${result.user?.email || 'N/A'}\nOrganización: ${result.organization?.name || 'N/A'}\nRol: ${result.membership?.role || 'N/A'}`);
+    
+  } catch (error) {
+    console.error('RBAC Test Error:', error);
+    toast('❌ Error al acceder a endpoint protegido');
+    
+    if (error.status === 401) {
+      toast('🔐 No autorizado - Redirigiendo a login...');
+      navigate('login');
+    } else if (error.status === 403) {
+      alert('Acceso denegado: No tienes los permisos necesarios para esta organización');
+    } else {
+      alert(`Error: ${error.message || 'Error desconocido'}`);
+    }
+  }
 }
 
 function renderEventCardFull(e) {
@@ -235,109 +489,178 @@ function renderEventCardFull(e) {
 }
 
 // ── EVENT DETAIL ─────────────────────────────────────────────────────────────
-function renderEventDetail(eventId) {
-  const e = DATABASE.events.find(x => x.id === eventId);
-  if (!e) return;
+async function renderEventDetail(eventId) {
   const el = document.getElementById('page-event-detail');
   const content = el.querySelector('.page-content');
-  const rev = DATABASE.getEventRevenue(e.id);
-  const sold = DATABASE.getTotalSold(e.id);
-  const pct = Math.round((sold / e.capacity) * 100);
-  const artists = DATABASE.artists.filter(a => e.lineup.includes(a.name));
-
+  
+  // Show loading state
   content.innerHTML = `
+    <button onclick="navigate('events')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
+    <div style="text-align:center;padding:2rem">
+      <div style="font-size:2rem">🔄</div>
+      <div style="margin-top:0.5rem;color:var(--text-muted)">Cargando evento...</div>
+    </div>
+  `;
+  
+  try {
+    // Fetch event from backend
+    const events = await window.ApiClient.get('/api/events');
+    const e = events.find(event => event.id === eventId);
+    
+    if (!e) {
+      content.innerHTML = `
+        <button onclick="navigate('events')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
+        <div class="empty-state">
+          <div class="empty-icon">📅</div>
+          <div class="empty-title">Evento no encontrado</div>
+        </div>
+      `;
+      return;
+    }
+
+    // Calculate mock data for now (would come from backend in real implementation)
+    const sold = Math.floor(Math.random() * e.capacity || 1000);
+    const pct = Math.round((sold / (e.capacity || 1000)) * 100);
+
+    content.innerHTML = `
     <button onclick="navigate('events')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
     <div style="border-radius:var(--radius-xl);overflow:hidden;border:1px solid var(--border);margin-bottom:1.2rem">
       <div style="height:220px;background:linear-gradient(135deg,#1a0820,#3d0055,#1a0820);display:flex;align-items:center;justify-content:center;font-size:6rem;position:relative">
-        ${e.flyer}
-        ${e.status === 'live' ? '<span class="badge badge-live" style="position:absolute;top:1rem;left:1rem">🔴 LIVE</span>' : '<span class="badge badge-primary" style="position:absolute;top:1rem;left:1rem">'+e.month+' '+e.day+'</span>'}
+        ${e.flyer || '🌌'}
+        ${e.status === 'live' ? '<span class="badge badge-live" style="position:absolute;top:1rem;left:1rem">🔴 LIVE</span>' : '<span class="badge badge-primary" style="position:absolute;top:1rem;left:1rem">'+new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })+'</span>'}
       </div>
       <div style="padding:1.2rem">
         <h2 style="font-size:1.5rem;font-weight:900;margin-bottom:0.3rem">${e.title}</h2>
-        <div style="color:var(--primary);font-weight:600;margin-bottom:0.5rem">📍 ${e.venue}</div>
-        <div style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem">🕐 ${e.time}</div>
-        <p style="font-size:0.9rem;line-height:1.6;color:rgba(240,230,255,0.8)">${e.description}</p>
-        <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap">${e.tags.map(t => `<span class="badge badge-glass">${t}</span>`).join('')}</div>
+        <div style="color:var(--primary);font-weight:600;margin-bottom:0.5rem">📍 ${e.venue || 'Venue'}</div>
+        <div style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem">🕐 ${new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
+        <p style="font-size:0.9rem;line-height:1.6;color:rgba(240,230,255,0.8)">${e.description || 'Una experiencia cósmica única te espera.'}</p>
+        <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap">${(e.tags || []).map(t => `<span class="badge badge-glass">${t}</span>`).join('')}</div>
       </div>
     </div>
 
-    <div class="section-header"><span class="section-title">Capacidad</span><span class="text-muted text-sm">${sold} / ${e.capacity}</span></div>
+    <div class="section-header"><span class="section-title">Capacidad</span><span class="text-muted text-sm">${sold} / ${e.capacity || 1000}</span></div>
     <div class="progress-bar" style="margin-bottom:1.2rem;background:rgba(209,37,244,0.1)"><div class="progress-fill" style="width:${pct}%;background:var(--primary)"></div></div>
 
-    <div class="stats-grid" style="margin-bottom:1.5rem">
-      <div class="stat-card"><div class="stat-label">Ingresos</div><div class="stat-value" style="font-size:1.1rem">$${(rev/1000).toFixed(1)}k</div></div>
-      <div class="stat-card"><div class="stat-label">Vendidas</div><div class="stat-value" style="font-size:1.1rem">${sold}</div></div>
-      <div class="stat-card"><div class="stat-label">General</div><div class="stat-value" style="font-size:1.1rem">${e.soldGeneral}<div class="stat-change stat-up">$${e.ticketGeneral}</div></div></div>
-      <div class="stat-card"><div class="stat-label">VIP</div><div class="stat-value" style="font-size:1.1rem">${e.soldVIP}<div class="stat-change" style="color:var(--cyan)">$${e.ticketVIP}</div></div></div>
-    </div>
-
     <div class="section-header"><span class="section-title">Lineup</span></div>
-    ${e.lineup.map(name => {
-      const a = DATABASE.artists.find(x => x.name === name);
-      return `<div class="list-item" onclick="${a ? `navigate('artist-detail',${a.id})` : ''}">
-        <div class="list-icon">${a ? a.emoji : '🎵'}</div>
-        <div class="list-body"><div class="list-title">${name}</div><div class="list-subtitle">${a ? a.genre : 'Artista invitado'}</div></div>
+    ${(e.lineup || []).map(name => {
+      return `<div class="list-item">
+        <div class="list-icon">🎵</div>
+        <div class="list-body"><div class="list-title">${name}</div><div class="list-subtitle">Artista invitado</div></div>
         <span style="color:var(--primary);font-size:1.1rem">›</span>
       </div>`;
     }).join('')}
 
     <div style="margin-top:1.5rem">
-      <button class="btn btn-primary btn-full" onclick="navigate('tickets',${e.id})">🎫 Comprar Entradas</button>
-      <button class="btn btn-outline btn-full" style="margin-top:0.5rem" onclick="shareEvent(${e.id})">📤 Compartir Evento</button>
+      <button class="btn btn-primary btn-full" onclick="navigate('tickets','${e.id}')">🎫 Comprar Entradas</button>
+      <button class="btn btn-outline btn-full" style="margin-top:0.5rem" onclick="shareEvent('${e.id}')">📤 Compartir Evento</button>
     </div>
   `;
+    
+  } catch (error) {
+    console.error('Error loading event detail:', error);
+    content.innerHTML = `
+      <button onclick="navigate('events')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <div class="empty-title">Error al cargar evento</div>
+        <button class="btn btn-primary" style="margin-top:1.5rem" onclick="renderEventDetail('${eventId}')">🔄 Reintentar</button>
+      </div>
+    `;
+  }
 }
 
 function shareEvent(id) {
-  const e = DATABASE.events.find(x => x.id === id);
-  if (navigator.share) navigator.share({ title: e.title, text: `${e.title} - ${e.venue}`, url: window.location.href });
-  else { navigator.clipboard.writeText(`${e.title} - ${e.venue}`).then(() => toast('📋 Copiado al portapapeles!')); }
+  // Simplified share function without DATABASE dependency
+  if (navigator.share) {
+    navigator.share({ title: 'Paraíso Astral Event', text: '¡Mira este evento increíble!', url: window.location.href });
+  } else {
+    navigator.clipboard.writeText('¡Mira este evento de Paraíso Astral!').then(() => toast('📋 Copiado al portapapeles!'));
+  }
 }
 
 // ── ARTISTS PAGE ──────────────────────────────────────────────────────────────
-function renderArtists(filter = 'all') {
+async function renderArtists(filter = 'all') {
   const el = document.getElementById('page-artists');
   const content = el.querySelector('.page-content');
-  const genres = ['all', 'Techno', 'Psytrance', 'Ambient', 'House'];
-  let artists = DATABASE.artists;
-  if (filter !== 'all') artists = DATABASE.artists.filter(a => a.genre.toLowerCase().includes(filter.toLowerCase()));
+  
+  // Show loading state
+  content.innerHTML = '<div style="text-align:center;padding:2rem"><div style="font-size:2rem">🔄</div><div style="margin-top:1rem;color:var(--text-muted)">Cargando artistas...</div></div>';
+  
+  try {
+    // Mock artists data for now (would come from backend API)
+    const artists = [
+      { id: 1, name: "Nebula Flux", role: "Headliner", genre: "High Velocity Techno", emoji: "🎧" },
+      { id: 2, name: "Cosmic Ray", role: "Resident", genre: "Psychedelic Dub", emoji: "🌀" },
+      { id: 3, name: "Astral Void", role: "Special Guest", genre: "Ethereal Vocals", emoji: "🎤" },
+      { id: 4, name: "Solar Flare", role: "Rising Star", genre: "Acid House", emoji: "⚡" },
+      { id: 5, name: "Luna Edge", role: "Top Performer", genre: "Dark Techno", emoji: "🌙" }
+    ];
+    
+    const genres = ['all', 'Techno', 'Psytrance', 'Ambient', 'House'];
+    let filteredArtists = artists;
+    if (filter !== 'all') filteredArtists = artists.filter(a => a.genre.toLowerCase().includes(filter.toLowerCase()));
 
-  content.innerHTML = `
-    <div style="display:flex;gap:0.5rem;overflow-x:auto;margin-bottom:1.2rem;padding-bottom:0.3rem">
-      ${genres.map(g => `<button class="btn ${filter===g?'btn-primary':'btn-ghost'}" style="flex-shrink:0;padding:0.4rem 1rem;font-size:0.8rem" onclick="renderArtists('${g}')">${g==='all'?'Todos':g}</button>`).join('')}
-    </div>
+    content.innerHTML = `
+      <div style="display:flex;gap:0.5rem;overflow-x:auto;margin-bottom:1.2rem;padding-bottom:0.3rem">
+        ${genres.map(g => `<button class="btn ${filter===g?'btn-primary':'btn-ghost'}" style="flex-shrink:0;padding:0.4rem 1rem;font-size:0.8rem" onclick="renderArtists('${g}')">${g==='all'?'Todos':g}</button>`).join('')}
+      </div>
 
-    <div class="section-header"><span class="section-title">Estrellas del Universo</span></div>
-    <div class="artist-grid">
-      ${artists.map(a => `
-        <div class="artist-card" onclick="navigate('artist-detail', ${a.id})">
-          <div class="artist-img-placeholder">${a.emoji}</div>
-          <div class="artist-overlay">
-            <div class="artist-role">${a.role}</div>
-            <div class="artist-name">${a.name}</div>
-            <div class="artist-genre">🎵 ${a.genre}</div>
-          </div>
-        </div>`).join('')}
-    </div>
+      <div class="section-header"><span class="section-title">Estrellas del Universo</span></div>
+      <div class="artist-grid">
+        ${filteredArtists.map(a => `
+          <div class="artist-card" onclick="navigate('artist-detail', ${a.id})">
+            <div class="artist-img-placeholder">${a.emoji}</div>
+            <div class="artist-overlay">
+              <div class="artist-role">${a.role}</div>
+              <div class="artist-name">${a.name}</div>
+              <div class="artist-genre">🎵 ${a.genre}</div>
+            </div>
+          </div>`).join('')}
+      </div>
 
-    <div class="section-header" style="margin-top:1.5rem"><span class="section-title">Top Performers</span></div>
-    <div class="h-scroll">
-      ${DATABASE.artists.sort((a,b) => b.followers - a.followers).slice(0,6).map((a,i) => `
-        <div class="circle-avatar" onclick="navigate('artist-detail',${a.id})">
-          <div class="circle-avatar-img ${i===0?'active-border':''}">${a.emoji}</div>
-          <div class="circle-avatar-name">${a.name.split(' ')[0]}</div>
-        </div>`).join('')}
-    </div>
-  `;
+      <div class="section-header" style="margin-top:1.5rem"><span class="section-title">Top Performers</span></div>
+      <div class="h-scroll">
+        ${artists.sort((a,b) => Math.random() - 0.5).slice(0,6).map((a,i) => `
+          <div class="circle-avatar" onclick="navigate('artist-detail',${a.id})">
+            <div class="circle-avatar-img ${i===0?'active-border':''}">${a.emoji}</div>
+            <div class="circle-avatar-name">${a.name.split(' ')[0]}</div>
+          </div>`).join('')}
+      </div>
+    `;
+    
+  } catch (error) {
+    console.error('Error loading artists:', error);
+    content.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <div class="empty-title">Error al cargar artistas</div>
+      </div>
+    `;
+  }
 }
 
 // ── ARTIST DETAIL ─────────────────────────────────────────────────────────────
-function renderArtistDetail(artistId) {
-  const a = DATABASE.artists.find(x => x.id === artistId);
-  if (!a) return;
+async function renderArtistDetail(artistId) {
   const el = document.getElementById('page-artist-detail');
   const content = el.querySelector('.page-content');
-  const artistEvents = DATABASE.events.filter(e => e.lineup.includes(a.name));
+  
+  // Mock artist data for now (would come from backend API)
+  const artists = [
+    { id: 1, name: "Nebula Flux", role: "Headliner", genre: "High Velocity Techno", emoji: "🎧", bio: "DJ referente del techno underground europeo. Conocido por sus sets de alta energía y técnica impecable." },
+    { id: 2, name: "Cosmic Ray", role: "Resident", genre: "Psychedelic Dub", emoji: "🌀", bio: "Residente histórico de Paraíso Astral. Maestro del dub psicodélico y las texturas sonoras." },
+    { id: 3, name: "Astral Void", role: "Special Guest", genre: "Ethereal Vocals", emoji: "🎤", bio: "Vocalista electrónica con presencia escénica única. Sus performances fusionan música y arte visual." },
+    { id: 4, name: "Solar Flare", role: "Rising Star", genre: "Acid House", emoji: "⚡", bio: "La estrella emergente del circuito underground. Su sonido ácido y contundente está conquistando los clubs." },
+    { id: 5, name: "Luna Edge", role: "Top Performer", genre: "Dark Techno", emoji: "🌙", bio: "Una de las artistas más versátiles de la escena. Sus sets nocturnos son experiencias transformadoras." }
+  ];
+  
+  const a = artists.find(x => x.id === artistId);
+  if (!a) return;
+  
+  // Mock events for this artist (would come from backend)
+  const artistEvents = [
+    { id: 1, title: "Neon Nebula Rave", venue: "Cosmic Dome, Sector 7", startAt: new Date('2024-10-04T22:00:00Z') },
+    { id: 2, title: "Interstellar Rave 2024", venue: "Galactic Station V", startAt: new Date('2024-12-14T22:00:00Z') }
+  ].filter(e => e.title.includes(a.name));
 
   content.innerHTML = `
     <button onclick="navigate('artists')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
@@ -346,7 +669,7 @@ function renderArtistDetail(artistId) {
       <span class="badge badge-glass" style="margin-bottom:0.5rem">${a.role}</span>
       <h2 style="font-size:1.8rem;font-weight:900;margin-bottom:0.3rem">${a.name}</h2>
       <div style="color:var(--primary);font-size:0.9rem;font-weight:600">🎵 ${a.genre}</div>
-      <div style="color:var(--text-muted);font-size:0.8rem;margin-top:0.3rem">👥 ${(a.followers/1000).toFixed(1)}k seguidores</div>
+      <div style="color:var(--text-muted);font-size:0.8rem;margin-top:0.3rem">👥 ${(Math.random() * 50 + 10).toFixed(1)}k seguidores</div>
     </div>
     <div class="glass-card" style="padding:1.2rem;margin-bottom:1.5rem">
       <h3 style="font-family:var(--font-display);font-size:0.8rem;margin-bottom:0.5rem;color:var(--primary)">BIO</h3>
@@ -355,12 +678,12 @@ function renderArtistDetail(artistId) {
     <div class="section-header"><span class="section-title">Próximas Actuaciones</span></div>
     ${artistEvents.length === 0 ? '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos próximos</div></div>' :
       artistEvents.map(e => `
-        <div class="list-item" onclick="navigate('event-detail',${e.id})">
+        <div class="list-item" onclick="navigate('event-detail','${e.id}')">
           <div style="background:rgba(209,37,244,0.15);border:1px solid var(--border);border-radius:var(--radius);padding:0.4rem 0.6rem;text-align:center;flex-shrink:0">
-            <div style="font-size:0.55rem;text-transform:uppercase;color:var(--primary);font-weight:700">${e.month}</div>
-            <div style="font-family:var(--font-display);font-size:1.2rem;font-weight:800;line-height:1">${e.day}</div>
+            <div style="font-size:0.55rem;text-transform:uppercase;color:var(--primary);font-weight:700">${new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short' })}</div>
+            <div style="font-family:var(--font-display);font-size:1.2rem;font-weight:800;line-height:1">${new Date(e.startAt).getDate()}</div>
           </div>
-          <div class="list-body"><div class="list-title">${e.title}</div><div class="list-subtitle">${e.venue} · ${e.time}</div></div>
+          <div class="list-body"><div class="list-title">${e.title}</div><div class="list-subtitle">${e.venue} · ${new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div></div>
           <span style="color:var(--primary)">›</span>
         </div>`).join('')}
     <div style="margin-top:1.5rem">
@@ -475,36 +798,7 @@ function renderPaymentModal() {
 function confirmPayment() {
   closeModal('modal-payment');
   toast('🎉 ¡Entrada comprada exitosamente!');
-  const e = DATABASE.events.find(x => x.id === DATABASE.state.selectedEvent);
-  if (e) {
-    if (DATABASE.state.selectedTicketType === 'general') e.soldGeneral++;
-    if (DATABASE.state.selectedTicketType === 'vip') e.soldVIP++;
-    if (DATABASE.state.selectedTicketType === 'backstage') e.soldBackstage++;
-  }
-}
-
-// ── NEWS PAGE ─────────────────────────────────────────────────────────────────
-function renderNews() {
-  const el = document.getElementById('page-news');
-  const content = el.querySelector('.page-content');
-  content.innerHTML = `
-    <div class="search-bar">
-      <span class="search-icon">🔍</span>
-      <input class="input" type="text" placeholder="Buscar noticias..." oninput="filterNews(this.value)" />
-    </div>
-    <div id="news-list">
-      ${DATABASE.news.map(n => `
-        <div class="list-item" onclick="navigate('news-detail',${n.id})">
-          <div class="list-icon" style="font-size:1.5rem">${n.emoji}</div>
-          <div class="list-body">
-            <div style="font-size:0.6rem;color:var(--primary);text-transform:uppercase;font-weight:700;letter-spacing:0.08em">${n.category}</div>
-            <div class="list-title">${n.title}</div>
-            <div class="list-subtitle">📅 ${n.date}</div>
-          </div>
-          <span style="color:var(--primary)">›</span>
-        </div>`).join('')}
-    </div>
-  `;
+  // Note: Payment processing would go here with real backend integration
 }
 
 function filterNews(q) {
@@ -926,3 +1220,133 @@ window.navigate = function(pageId, data) {
   if (pageId === 'news-detail') { renderNewsDetail(data); document.querySelectorAll('.page').forEach(p=>p.classList.remove('active')); document.getElementById('page-news-detail').classList.add('active'); return; }
   _nav(pageId, data);
 };
+
+// ===== AUTHENTICATION FUNCTIONS =====
+
+/**
+ * Show login page
+ */
+function showLogin() {
+  navigate('login');
+}
+
+/**
+ * Show register page
+ */
+function showRegister() {
+  navigate('register');
+}
+
+/**
+ * Handle login form submission
+ */
+async function handleLogin(event) {
+  event.preventDefault();
+  
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  const errorDiv = document.getElementById('login-error');
+  const btnText = document.getElementById('login-btn-text');
+  const loading = document.getElementById('login-loading');
+  
+  // Show loading state
+  btnText.style.display = 'none';
+  loading.style.display = 'inline';
+  errorDiv.style.display = 'none';
+  
+  try {
+    const result = await window.Auth.login(email, password);
+    
+    if (result.success) {
+      toast('🚀 ¡Bienvenido a Paraíso Astral!');
+      
+      // Handle return URL if exists
+      const returnTo = sessionStorage.getItem('returnTo');
+      sessionStorage.removeItem('returnTo');
+      
+      navigate(returnTo || 'home');
+    } else {
+      errorDiv.textContent = result.error;
+      errorDiv.style.display = 'block';
+    }
+  } catch (error) {
+    errorDiv.textContent = 'Error de conexión. Intenta nuevamente.';
+    errorDiv.style.display = 'block';
+  } finally {
+    // Hide loading state
+    btnText.style.display = 'inline';
+    loading.style.display = 'none';
+  }
+}
+
+/**
+ * Handle register form submission
+ */
+async function handleRegister(event) {
+  event.preventDefault();
+  
+  const email = document.getElementById('register-email').value;
+  const password = document.getElementById('register-password').value;
+  const confirm = document.getElementById('register-confirm').value;
+  const errorDiv = document.getElementById('register-error');
+  const btnText = document.getElementById('register-btn-text');
+  const loading = document.getElementById('register-loading');
+  
+  // Validate passwords match
+  if (password !== confirm) {
+    errorDiv.textContent = 'Las contraseñas no coinciden';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  // Show loading state
+  btnText.style.display = 'none';
+  loading.style.display = 'inline';
+  errorDiv.style.display = 'none';
+  
+  try {
+    const result = await window.Auth.register(email, password);
+    
+    if (result.success) {
+      toast('🌟 ¡Cuenta creada exitosamente!');
+      navigate('home');
+    } else {
+      errorDiv.textContent = result.error;
+      errorDiv.style.display = 'block';
+    }
+  } catch (error) {
+    errorDiv.textContent = 'Error de conexión. Intenta nuevamente.';
+    errorDiv.style.display = 'block';
+  } finally {
+    // Hide loading state
+    btnText.style.display = 'inline';
+    loading.style.display = 'none';
+  }
+}
+
+/**
+ * Handle logout
+ */
+async function handleLogout() {
+  try {
+    await window.Auth.logout();
+    toast('👋 Sesión cerrada');
+    navigate('login');
+  } catch (error) {
+    toast('Error al cerrar sesión');
+  }
+}
+
+/**
+ * Check authentication state and redirect if needed
+ */
+function checkAuthState() {
+  const user = window.Auth.getCurrentUser();
+  if (!user) {
+    // User not logged in, show login
+    navigate('login');
+  }
+}
+
+// Initialize app when DOM is ready
+document.addEventListener('DOMContentLoaded', initializeApp);

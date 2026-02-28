@@ -38,6 +38,79 @@
 
   <!-- ════ PAGES ════ -->
 
+  <!-- LOGIN -->
+  <div class="page" id="page-login">
+    <div class="page-content fade-in">
+      <div style="text-align:center;max-width:400px;margin:0 auto;padding:2rem 1rem">
+        <div style="font-size:4rem;margin-bottom:1rem">🌌</div>
+        <h1 style="font-family:var(--font-display);font-size:2rem;font-weight:900;margin-bottom:0.5rem;color:var(--primary)">PARAÍSO ASTRAL</h1>
+        <p style="color:var(--text-muted);margin-bottom:2rem">Tu portal cósmico de música electrónica</p>
+        
+        <form id="login-form" style="text-align:left">
+          <div class="form-group">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" class="input" placeholder="tu@email.com" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="login-password">Contraseña</label>
+            <input type="password" id="login-password" class="input" placeholder="•••••••••" required>
+          </div>
+          
+          <button type="submit" class="btn btn-primary btn-full" style="margin-top:1.5rem">
+            <span id="login-btn-text">🚀 Iniciar Sesión</span>
+            <span id="login-loading" style="display:none">🔄 Conectando...</span>
+          </button>
+          
+          <div style="margin-top:1rem;text-align:center">
+            <a href="#" onclick="showRegister()" style="color:var(--primary);font-size:0.85rem">¿No tienes cuenta? Regístrate</a>
+          </div>
+        </form>
+        
+        <div id="login-error" style="margin-top:1rem;padding:0.75rem;background:rgba(255,0,64,0.1);border:1px solid rgba(255,0,64,0.3);border-radius:var(--radius);color:var(--pink);font-size:0.85rem;display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REGISTER -->
+  <div class="page" id="page-register">
+    <div class="page-content fade-in">
+      <div style="text-align:center;max-width:400px;margin:0 auto;padding:2rem 1rem">
+        <div style="font-size:4rem;margin-bottom:1rem">🌌</div>
+        <h1 style="font-family:var(--font-display);font-size:2rem;font-weight:900;margin-bottom:0.5rem;color:var(--primary)">Únete al Cosmos</h1>
+        <p style="color:var(--text-muted);margin-bottom:2rem">Crea tu cuenta en Paraíso Astral</p>
+        
+        <form id="register-form" style="text-align:left">
+          <div class="form-group">
+            <label for="register-email">Email</label>
+            <input type="email" id="register-email" class="input" placeholder="tu@email.com" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="register-password">Contraseña</label>
+            <input type="password" id="register-password" class="input" placeholder="Mínimo 6 caracteres" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="register-confirm">Confirmar Contraseña</label>
+            <input type="password" id="register-confirm" class="input" placeholder="Repite tu contraseña" required>
+          </div>
+          
+          <button type="submit" class="btn btn-primary btn-full" style="margin-top:1.5rem">
+            <span id="register-btn-text">🌟 Crear Cuenta</span>
+            <span id="register-loading" style="display:none">🔄 Creando...</span>
+          </button>
+          
+          <div style="margin-top:1rem;text-align:center">
+            <a href="#" onclick="showLogin()" style="color:var(--primary);font-size:0.85rem">¿Ya tienes cuenta? Inicia sesión</a>
+          </div>
+        </form>
+        
+        <div id="register-error" style="margin-top:1rem;padding:0.75rem;background:rgba(255,0,64,0.1);border:1px solid rgba(255,0,64,0.3);border-radius:var(--radius);color:var(--pink);font-size:0.85rem;display:none"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- HOME -->
   <div class="page" id="page-home">
     <div class="page-content fade-in"></div>
@@ -177,7 +250,14 @@
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
-<script src="js/db.js"></script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+
+<!-- Configuration -->
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/apiClient.js"></script>
 <script src="js/app.js"></script>
 <script>
   // Patch modal content rendering after app loads
