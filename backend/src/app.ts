@@ -1,6 +1,11 @@
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { env } from './config/env';
+import { authRoutes } from './modules/auth/auth.routes';
+import { requireAuth } from './middlewares/requireAuth';
+import { resolveOrganization } from './middlewares/resolveOrganization';
+import { requireRole } from './middlewares/requireRole';
+import { MembershipRole } from './types/auth';
 
 // Global error handler interface
 interface AppError extends Error {
@@ -87,6 +92,33 @@ export const createApp = (): Application => {
 
   // Version endpoint
   app.get('/api/version', version);
+
+  // Auth routes
+  app.use('/api/auth', authRoutes);
+
+  // Ejemplo protegido con RBAC
+  app.get(
+    '/api/orgs/:orgId/test',
+    requireAuth,
+    resolveOrganization,
+    requireRole([MembershipRole.ADMIN, MembershipRole.OWNER]),
+    (req: Request, res: Response) => {
+      res.json({
+        message: 'Access granted',
+        user: {
+          id: req.user!.id,
+          email: req.user!.email,
+        },
+        organization: {
+          id: req.organization!.id,
+          name: req.organization!.name,
+        },
+        membership: {
+          role: req.membership!.role,
+        },
+      });
+    }
+  );
 
   // API routes will be added here
   // app.use('/api/v1/auth', authRoutes);
