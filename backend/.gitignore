@@ -115,3 +115,4 @@ test-results.xml
 
 # Local development
 .local
+astral.serviceAccount.json

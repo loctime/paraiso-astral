@@ -1,9 +1,9 @@
-import admin from 'firebase-admin';
-import path from 'path';
-import fs from 'fs';
+const admin = require('firebase-admin');
+const path = require('path');
+const fs = require('fs');
 
 // Ruta al archivo de service account
-const serviceAccountPath = path.join(__dirname, '..', '..', 'astral.serviceAccount.json');
+const serviceAccountPath = path.join(__dirname, '..', 'astral.serviceAccount.json');
 
 // Validar que el archivo exista
 if (!fs.existsSync(serviceAccountPath)) {
@@ -14,10 +14,10 @@ if (!fs.existsSync(serviceAccountPath)) {
 const serviceAccount = require(serviceAccountPath);
 
 // Inicializar Firebase Admin solo si no está inicializado
-let firebaseApp: admin.app.App;
+let firebaseApp;
 
 if (admin.apps.length > 0) {
-  firebaseApp = admin.apps[0]!;
+  firebaseApp = admin.apps[0];
 } else {
   firebaseApp = admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -25,6 +25,10 @@ if (admin.apps.length > 0) {
   });
 }
 
-export const firestore = firebaseApp.firestore();
-export const auth = firebaseApp.auth();
-export { firebaseApp };
+// Exportar servicios
+module.exports = {
+  app: firebaseApp,
+  auth: admin.auth(),
+  firestore: admin.firestore(),
+  storage: admin.storage()
+};
