@@ -1,6 +1,6 @@
-// ===== PARAÍSO ASTRAL - DATABASE / STATE =====
+// ===== DATABASE - DATOS ESTÁTICOS - PARAÍSO ASTRAL =====
 
-const DB = {
+const DATABASE = {
   events: [
     {
       id: 1, title: "Neon Nebula Rave", venue: "Cosmic Dome, Sector 7",
@@ -121,45 +121,17 @@ const DB = {
     projection: 5800,
     chartData: [40, 65, 90, 55, 75, 100, 85],
     chartLabels: ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"],
-  },
-
-  state: {
-    currentPage: "home",
-    selectedEvent: null,
-    selectedArtist: null,
-    selectedRRPP: null,
-    calendarMonth: 9, // October 2024
-    calendarYear: 2024,
-    selectedTicketType: "general",
-    cartItems: [],
-    isAdmin: true,
-    isLoggedIn: true,
-    userName: "Admin",
-    unreadNotifs: 3,
   }
 };
 
-// Helper: get tickets sold for event
-DB.getEventRevenue = function(eventId) {
-  const e = this.events.find(x => x.id === eventId);
-  if (!e) return 0;
-  return (e.soldGeneral * e.ticketGeneral) + (e.soldVIP * e.ticketVIP) + (e.soldBackstage * e.ticketBackstage);
-};
+// Inicializar la API con los datos
+if (typeof API !== 'undefined') {
+  API.initData(DATABASE);
+}
 
-DB.getTotalSold = function(eventId) {
-  const e = this.events.find(x => x.id === eventId);
-  if (!e) return 0;
-  return e.soldGeneral + e.soldVIP + e.soldBackstage;
-};
-
-// Save state to localStorage
-DB.save = function() {
-  try { localStorage.setItem('paraiso_state', JSON.stringify(this.state)); } catch(e) {}
-};
-
-DB.load = function() {
-  try {
-    const saved = localStorage.getItem('paraiso_state');
-    if (saved) Object.assign(this.state, JSON.parse(saved));
-  } catch(e) {}
-};
+// Exportar para compatibilidad temporal
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = DATABASE;
+} else {
+  window.DATABASE = DATABASE;
+}

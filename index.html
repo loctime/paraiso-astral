@@ -10,7 +10,9 @@
   <meta name="apple-mobile-web-app-title" content="Paraíso Astral" />
   <link rel="manifest" href="manifest.json" />
   <title>Paraíso Astral</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="styles/base.css" />
+  <link rel="stylesheet" href="styles/theme.css" />
+  <link rel="stylesheet" href="styles/components.css" />
 </head>
 <body>
 
@@ -109,6 +111,18 @@
     <div class="page-content fade-in"></div>
   </div>
 
+  <!-- 404 -->
+  <div class="page" id="page-404">
+    <div class="page-content fade-in">
+      <div class="empty-state">
+        <div class="empty-icon">🌌</div>
+        <div class="empty-title">Página no encontrada</div>
+        <div style="color: var(--text-muted); margin-top: 0.5rem;">La ruta que buscas no existe en el cosmos</div>
+        <button class="btn btn-primary" style="margin-top: 1.5rem" onclick="Router.push('/')">🏠 Volver al inicio</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ════ BOTTOM NAV ════ -->
   <nav class="bottom-nav">
     <button class="nav-item" data-nav="home" onclick="navigate('home')">
@@ -164,6 +178,15 @@
 <div class="toast" id="toast"></div>
 
 <script src="js/db.js"></script>
+<script src="js/core/store.js"></script>
+<script src="js/core/api.js"></script>
+<script src="js/core/auth.js"></script>
+<script src="js/core/router.js"></script>
+<script src="js/core/storage.js"></script>
+<script src="js/core/ui.js"></script>
+<script src="js/features/tickets/ticket.js"></script>
+<script src="js/features/tickets/validator.js"></script>
+<script src="js/features/push/subscription.js"></script>
 <script src="js/app.js"></script>
 <script>
   // Patch modal content rendering after app loads

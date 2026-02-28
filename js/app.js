@@ -2,18 +2,25 @@
 
 // ── ROUTER ──────────────────────────────────────────────────────────────────
 function navigate(pageId, data) {
+  // Usar el store para navegación
+  if (typeof Store !== 'undefined') {
+    Store.navigate(pageId, data);
+  }
+  
+  // Actualizar UI
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const page = document.getElementById('page-' + pageId);
   if (page) { page.classList.add('active'); page.querySelector('.page-content').scrollTop = 0; }
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const navItem = document.querySelector(`[data-nav="${pageId}"]`);
   if (navItem) navItem.classList.add('active');
-  DB.state.currentPage = pageId;
+  
+  // Renderizar página específica
   if (data) {
-    if (pageId === 'event-detail') { DB.state.selectedEvent = data; renderEventDetail(data); }
-    if (pageId === 'artist-detail') { DB.state.selectedArtist = data; renderArtistDetail(data); }
-    if (pageId === 'rrpp-detail') { DB.state.selectedRRPP = data; renderRRPPDetail(data); }
-    if (pageId === 'tickets') { DB.state.selectedEvent = data; renderTicketsPage(data); }
+    if (pageId === 'event-detail') { renderEventDetail(data); }
+    if (pageId === 'artist-detail') { renderArtistDetail(data); }
+    if (pageId === 'rrpp-detail') { renderRRPPDetail(data); }
+    if (pageId === 'tickets') { renderTicketsPage(data); }
   }
 }
 
@@ -30,13 +37,14 @@ function closeModal(id) { document.getElementById(id).classList.remove('show'); 
 
 // ── HOME PAGE ────────────────────────────────────────────────────────────────
 function renderHome() {
-  const featured = DB.events.find(e => e.status === 'featured') || DB.events[0];
+  // Usar API para obtener datos
+  const featured = typeof API !== 'undefined' ? API.getFeaturedEvent() : null;
+  const liveEvent = typeof API !== 'undefined' ? API.getLiveEvent() : null;
+  const upcomingEvents = typeof API !== 'undefined' ? API.getUpcomingEvents(3) : [];
+  const recentNews = typeof API !== 'undefined' ? API.getNews(4) : [];
+  
   const el = document.getElementById('page-home');
   const content = el.querySelector('.page-content');
-
-  const recentNews = DB.news.slice(0, 4);
-  const upcomingEvents = DB.events.filter(e => e.status !== 'live').slice(0, 3);
-  const liveEvent = DB.events.find(e => e.status === 'live');
 
   content.innerHTML = `
     ${liveEvent ? `
@@ -46,6 +54,7 @@ function renderHome() {
       <span class="badge badge-live">LIVE</span>
     </div>` : ''}
 
+    ${featured ? `
     <div class="hero fade-in" onclick="navigate('event-detail', ${featured.id})">
       <div class="hero-placeholder star-bg">${featured.flyer}</div>
       <div class="hero-overlay"></div>
@@ -61,7 +70,7 @@ function renderHome() {
           <button class="btn btn-primary" style="padding:0.6rem 1.2rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('tickets',${featured.id})">🎫 Entradas</button>
         </div>
       </div>
-    </div>
+    </div>` : ''}
 
     <div class="section-header">
       <span class="section-title">Noticias & Novedades</span>
@@ -114,7 +123,8 @@ function renderEventCardMini(e) {
 function renderEvents(filter = 'upcoming') {
   const el = document.getElementById('page-events');
   const content = el.querySelector('.page-content');
-  const events = filter === 'past' ? DB.events.filter(e => e.status === 'past') : DB.events.filter(e => e.status !== 'past');
+  // Usar API para obtener eventos
+  const events = typeof API !== 'undefined' ? API.getEvents({ status: filter === 'past' ? 'past' : filter === 'live' ? 'live' : 'upcoming' }) : [];
 
   content.innerHTML = `
     <div class="tabs">
@@ -138,12 +148,14 @@ function renderEvents(filter = 'upcoming') {
 }
 
 function renderCalendar() {
-  const year = DB.state.calendarYear;
-  const month = DB.state.calendarMonth;
+  // Usar store para estado del calendario
+  const year = typeof Store !== 'undefined' ? Store.state.calendarYear : 2024;
+  const month = typeof Store !== 'undefined' ? Store.state.calendarMonth : 9;
   const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
-  const eventDays = DB.events.map(e => { const d = new Date(e.date); return d.getMonth() === month ? d.getDate() : 0; }).filter(d => d > 0);
+  // Usar API para eventos del calendario
+  const eventDays = typeof API !== 'undefined' ? API.getEventDaysInMonth(year, month) : [];
 
   let cells = '';
   for (let i = 0; i < firstDay; i++) cells += `<div class="cal-day other-month">${new Date(year, month, -firstDay + i + 1).getDate()}</div>`;
@@ -168,27 +180,29 @@ function renderCalendar() {
 }
 
 function changeCalMonth(dir) {
-  DB.state.calendarMonth += dir;
-  if (DB.state.calendarMonth < 0) { DB.state.calendarMonth = 11; DB.state.calendarYear--; }
-  if (DB.state.calendarMonth > 11) { DB.state.calendarMonth = 0; DB.state.calendarYear++; }
+  if (typeof Store !== 'undefined') {
+    Store.changeCalendarMonth(dir);
+  }
   renderEvents();
 }
 
 function filterEventsByDay(day) {
-  const dateStr = `${DB.state.calendarYear}-${String(DB.state.calendarMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-  const filtered = DB.events.filter(e => e.date === dateStr);
+  const year = typeof Store !== 'undefined' ? Store.state.calendarYear : 2024;
+  const month = typeof Store !== 'undefined' ? Store.state.calendarMonth : 9;
+  const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  const filtered = typeof API !== 'undefined' ? API.getEvents({ date: dateStr }) : [];
   const list = document.getElementById('events-list');
   if (list) list.innerHTML = filtered.length === 0 ? '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos este día</div></div>' : filtered.map(e => renderEventCardFull(e)).join('');
 }
 
 function filterEvents(query) {
-  const filtered = DB.events.filter(e => e.title.toLowerCase().includes(query.toLowerCase()) || e.venue.toLowerCase().includes(query.toLowerCase()));
+  const filtered = typeof API !== 'undefined' ? API.getEvents({ search: query }) : [];
   const list = document.getElementById('events-list');
   if (list) list.innerHTML = filtered.length === 0 ? '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Sin resultados</div></div>' : filtered.map(e => renderEventCardFull(e)).join('');
 }
 
 function renderEventCardFull(e) {
-  const rev = DB.getEventRevenue(e.id);
+  const rev = typeof API !== 'undefined' ? API.getEventRevenue(e.id) : 0;
   return `
     <div class="event-card" onclick="navigate('event-detail', ${e.id})">
       <div class="event-img-placeholder star-bg" style="height:160px">${e.flyer}</div>

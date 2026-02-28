@@ -1,0 +1,95 @@
+/* ===== BASE STYLES - PARAÍSO ASTRAL ===== */
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;600;700;800;900&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+
+/* ===== CSS VARIABLES ===== */
+:root {
+  --bg-dark:       #0d0610;
+  --bg-card:       #160d1c;
+  --bg-glass:      rgba(209,37,244,0.06);
+  --primary:       #d125f4;
+  --primary-glow:  rgba(209,37,244,0.35);
+  --cyan:          #00f2ff;
+  --green:         #39ff14;
+  --pink:          #ff0080;
+  --text:          #f0e6ff;
+  --text-muted:    #7a6b8a;
+  --border:        rgba(209,37,244,0.2);
+  --radius:        1rem;
+  --radius-lg:     1.5rem;
+  --radius-xl:     2rem;
+  --font-display:  'Orbitron', monospace;
+  --font-body:     'Exo 2', sans-serif;
+  --nav-h:         72px;
+  --header-h:      60px;
+}
+
+/* ===== RESET & BASE ===== */
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-dark);
+  color: var(--text);
+  min-height: 100dvh;
+  max-width: 430px;
+  margin: 0 auto;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* ===== LAYOUT SYSTEM ===== */
+.app { display: flex; flex-direction: column; min-height: 100dvh; }
+.page { display: none; flex-direction: column; flex: 1; }
+.page.active { display: flex; }
+.page-content { flex: 1; overflow-y: auto; padding: 0 1rem 6rem; padding-top: calc(var(--header-h) + 0.5rem); }
+.page-content::-webkit-scrollbar { display: none; }
+
+/* ===== ACCESSIBILITY ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===== UTILITIES ===== */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.focus-visible:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ===== RESPONSIVE HELPERS ===== */
+.flex { display: flex; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 0.75rem; }
+.mb-1 { margin-bottom: 0.25rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.p-relative { position: relative; }
+
+.text-primary { color: var(--primary); }
+.text-cyan { color: var(--cyan); }
+.text-green { color: var(--green); }
+.text-muted { color: var(--text-muted); }
+.font-display { font-family: var(--font-display); }
+.text-sm { font-size: 0.85rem; }
+.text-xs { font-size: 0.75rem; }
