@@ -877,6 +877,12 @@ window.addEventListener('DOMContentLoaded', () => {
     console.log('Store inicializado');
   }
   
+  // Inicializar API con los datos
+  if (typeof API !== 'undefined' && typeof DATABASE !== 'undefined') {
+    API.initData(DATABASE);
+    console.log('API inicializado con DATABASE');
+  }
+  
   // Renderizar páginas iniciales
   renderHome();
   renderEvents();

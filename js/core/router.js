@@ -57,6 +57,20 @@ class Router {
     });
   }
 
+  // ===== INICIALIZACIÓN =====
+  init() {
+    // Procesar la ruta actual
+    this.handleRoute();
+    
+    console.log('Router inicializado');
+  }
+
+  // ===== MANEJO DE RUTAS =====
+  handleRoute() {
+    const path = window.location.pathname;
+    this.navigateToPage(path);
+  }
+
   // ===== MANEJO DE HISTORIAL =====
   setupHistoryHandling() {
     if (typeof window !== 'undefined') {
