@@ -83,35 +83,4 @@ router.post('/attendee', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /public/event-access/:eventId/:firebaseUid
- * Check event access for a user (for debugging/testing)
- */
-router.get('/:eventId/:firebaseUid', async (req: Request, res: Response) => {
-  try {
-    const { eventId, firebaseUid } = req.params;
-
-    if (!eventId || !firebaseUid) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required parameters: eventId, firebaseUid'
-      });
-    }
-
-    const access = await EventAccessService.checkEventAccess(eventId, firebaseUid);
-    
-    return res.status(200).json({
-      success: true,
-      data: access
-    });
-
-  } catch (error) {
-    console.error('Error checking event access:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
-
 export { router as eventAccessRoutes };

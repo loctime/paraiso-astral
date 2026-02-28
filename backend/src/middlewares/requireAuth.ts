@@ -32,9 +32,9 @@ export const requireAuth = async (
       return;
     }
 
-    // Buscar usuario interno en PostgreSQL por email (temporal hasta que firebaseUid esté en la DB)
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+    // Buscar usuario interno en PostgreSQL por firebaseUid (lookup principal)
+    let user = await prisma.user.findUnique({
+      where: { firebaseUid: firebaseUid },
       select: {
         id: true,
         email: true,
@@ -45,6 +45,30 @@ export const requireAuth = async (
         passwordHash: true,
       },
     });
+
+    // Fallback: si no existe por firebaseUid, buscar por email y actualizar
+    if (!user) {
+      user = await prisma.user.findUnique({
+        where: { email: email.toLowerCase() },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          passwordHash: true,
+        },
+      });
+
+      // Si se encuentra por email, actualizar firebaseUid
+      if (user) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { firebaseUid: firebaseUid },
+        });
+      }
+    }
 
     if (!user) {
       res.status(401).json({
@@ -61,11 +85,10 @@ export const requireAuth = async (
     }
 
     // Adjuntar req.user con información de Firebase y base de datos
-    // Por ahora usamos type assertion para incluir firebaseUid
     req.user = {
       ...user,
       firebaseUid: firebaseUid,
-    } as any;
+    };
     
     next();
   } catch (error) {

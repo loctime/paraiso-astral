@@ -230,7 +230,8 @@ async function renderHome() {
   
   try {
     // Fetch events from backend
-    const events = await window.ApiClient.get('/api/events');
+    const response = await window.ApiClient.get('/api/events');
+    const events = response.data || [];
     
     if (!events || events.length === 0) {
       showErrorState(content, 'No hay eventos disponibles');
@@ -238,9 +239,9 @@ async function renderHome() {
     }
     
     // Find featured, live, and upcoming events
-    const featured = events.find(e => e.status === 'featured') || events[0];
-    const liveEvent = events.find(e => e.status === 'live');
-    const upcomingEvents = events.filter(e => e.status === 'upcoming').slice(0, 3);
+    const featured = events.find(e => e.isFeatured) || events[0];
+    const liveEvent = events.find(e => e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date()));
+    const upcomingEvents = events.filter(e => e.status === 'PUBLISHED' && new Date(e.startAt) > new Date()).slice(0, 3);
     
     // Mock news for now (can be replaced with real news API later)
     const recentNews = [
@@ -260,7 +261,7 @@ async function renderHome() {
 
     ${featured ? `
     <div class="hero fade-in" onclick="navigate('event-detail', '${featured.id}')">
-      <div class="hero-placeholder star-bg">${window.ApiClient.sanitizeHTML(featured.flyer || '🌌')}</div>
+      <div class="hero-placeholder star-bg">${window.ApiClient.sanitizeHTML(featured.coverImage || '🌌')}</div>
       <div class="hero-overlay"></div>
       <div class="hero-content">
         <span class="badge badge-primary" style="margin-bottom:0.5rem">Evento Destacado</span>
@@ -268,8 +269,8 @@ async function renderHome() {
         <p class="hero-sub">${new Date(featured.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} • ${window.ApiClient.sanitizeHTML(featured.venue || 'Venue')}</p>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1rem">
           <div class="avatar-row">
-            ${(featured.lineup || []).slice(0,3).map((a,i) => `<div class="avatar" style="background:hsl(${280+i*30},60%,40%);font-size:0.7rem;display:flex;align-items:center;justify-content:center">${window.ApiClient.sanitizeHTML((a || '')[0] || '🎵')}</div>`).join('')}
-            <div class="avatar avatar-count">+${Math.max(0,(featured.lineup || []).length-3)}</div>
+            ${featured ? featured.title.substring(0, 3).split('').map((c,i) => `<div class="avatar" style="background:hsl(${280+i*30},60%,40%);font-size:0.7rem;display:flex;align-items:center;justify-content:center">${c}</div>`).join('') : ''}
+            <div class="avatar avatar-count">+${Math.max(0, (featured ? featured.title.length : 0) - 3)}</div>
           </div>
           <button class="btn btn-primary" style="padding:0.6rem 1.2rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('tickets','${featured.id}')">🎫 Entradas</button>
         </div>
@@ -316,14 +317,14 @@ async function renderHome() {
 function renderEventCardMini(e) {
   return `
     <div class="event-card" onclick="navigate('event-detail', ${e.id})">
-      <div class="event-img-placeholder star-bg">${e.flyer}</div>
+      <div class="event-img-placeholder star-bg">${e.coverImage || '🌌'}</div>
       <div class="event-body">
         <div class="event-meta">
           <div><div class="event-name">${e.title}</div><div class="event-venue">${e.venue}</div></div>
-          <div class="event-date-badge"><div class="event-date-month">${e.month}</div><div class="event-date-day">${e.day}</div></div>
+          <div class="event-date-badge"><div class="event-date-month">${new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short' }).toUpperCase()}</div><div class="event-date-day">${new Date(e.startAt).getDate()}</div></div>
         </div>
-        ${e.status === 'live' ? '<span class="badge badge-live" style="margin-top:0.5rem">🔴 LIVE</span>' : ''}
-        <div class="event-lineup">👥 ${e.lineup.join(', ')}</div>
+        ${e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date()) ? '<span class="badge badge-live" style="margin-top:0.5rem">🔴 LIVE</span>' : ''}
+        <div class="event-lineup">� ${e.city || e.venue}</div>
       </div>
     </div>`;
 }
@@ -355,7 +356,8 @@ async function renderEvents(filter = 'upcoming') {
   
   try {
     // Fetch events from backend
-    const events = await window.ApiClient.get('/api/events');
+    const response = await window.ApiClient.get('/api/events');
+    const events = response.data || [];
     
     if (!events || events.length === 0) {
       document.getElementById('events-list').innerHTML = '<div class="empty-state"><div class="empty-icon">🌌</div><div class="empty-title">Sin eventos</div></div>';
@@ -365,8 +367,8 @@ async function renderEvents(filter = 'upcoming') {
     // Filter events based on status
     const filteredEvents = events.filter(e => {
       if (filter === 'past') return new Date(e.startAt) < new Date();
-      if (filter === 'live') return e.status === 'live';
-      return e.status === 'upcoming';
+      if (filter === 'live') return e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date());
+      return e.status === 'PUBLISHED' && new Date(e.startAt) > new Date();
     });
 
     document.getElementById('events-list').innerHTML = filteredEvents.length === 0 ? 
@@ -465,21 +467,22 @@ async function testRBAC() {
 }
 
 function renderEventCardFull(e) {
-  const rev = e.soldGeneral * e.ticketGeneral + e.soldVIP * e.ticketVIP + e.soldBackstage * e.ticketBackstage;
+  const isLive = e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date());
+  const revenue = 0; // No ticket data available in new schema
   return `
     <div class="event-card" onclick="navigate('event-detail', ${e.id})">
-      <div class="event-img-placeholder star-bg" style="height:160px">${e.flyer}</div>
+      <div class="event-img-placeholder star-bg" style="height:160px">${e.coverImage || '🌌'}</div>
       <div class="event-body">
         <div class="event-meta">
           <div>
-            ${e.status === 'live' ? '<span class="badge badge-live" style="margin-bottom:0.3rem">🔴 LIVE NOW</span><br>' : ''}
             <div class="event-name">${e.title}</div>
-            <div class="event-venue">📍 ${e.venue}</div>
+            <div class="event-venue">${e.venue}</div>
+            <div class="event-date">${new Date(e.startAt).toLocaleDateString('es-ES', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
           </div>
-          <div class="event-date-badge"><div class="event-date-month">${e.month}</div><div class="event-date-day">${e.day}</div></div>
+          <div class="event-date-badge"><div class="event-date-month">${new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short' }).toUpperCase()}</div><div class="event-date-day">${new Date(e.startAt).getDate()}</div></div>
         </div>
-        <div class="event-lineup" style="margin-top:0.5rem">🕐 ${e.time}</div>
-        <div class="event-lineup">🎤 ${e.lineup.join(', ')}</div>
+        <div class="event-lineup" style="margin-top:0.5rem">🕐 ${new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
+        <div class="event-lineup">📍 ${e.city || e.venue}</div>
         <div style="display:flex;gap:0.5rem;margin-top:0.75rem">
           <button class="btn btn-primary" style="flex:1;padding:0.6rem;font-size:0.78rem" onclick="event.stopPropagation();navigate('tickets',${e.id})">🎫 Comprar</button>
           <button class="btn btn-outline" style="padding:0.6rem 0.8rem;font-size:0.78rem" onclick="event.stopPropagation();navigate('event-detail',${e.id})">Ver más</button>
@@ -504,7 +507,8 @@ async function renderEventDetail(eventId) {
   
   try {
     // Fetch event from backend
-    const events = await window.ApiClient.get('/api/events');
+    const response = await window.ApiClient.get('/api/events');
+    const events = response.data || [];
     const e = events.find(event => event.id === eventId);
     
     if (!e) {
@@ -519,36 +523,59 @@ async function renderEventDetail(eventId) {
     }
 
     // Calculate mock data for now (would come from backend in real implementation)
-    const sold = Math.floor(Math.random() * e.capacity || 1000);
-    const pct = Math.round((sold / (e.capacity || 1000)) * 100);
+    const sold = 0; // No ticket data available in new schema
+    const pct = 0; // No capacity data available in new schema
 
     content.innerHTML = `
     <button onclick="navigate('events')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
     <div style="border-radius:var(--radius-xl);overflow:hidden;border:1px solid var(--border);margin-bottom:1.2rem">
       <div style="height:220px;background:linear-gradient(135deg,#1a0820,#3d0055,#1a0820);display:flex;align-items:center;justify-content:center;font-size:6rem;position:relative">
-        ${e.flyer || '🌌'}
-        ${e.status === 'live' ? '<span class="badge badge-live" style="position:absolute;top:1rem;left:1rem">🔴 LIVE</span>' : '<span class="badge badge-primary" style="position:absolute;top:1rem;left:1rem">'+new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })+'</span>'}
+        ${e.coverImage || '🌌'}
+        ${e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date()) ? '<span class="badge badge-live" style="position:absolute;top:1rem;left:1rem">🔴 LIVE</span>' : '<span class="badge badge-primary" style="position:absolute;top:1rem;left:1rem">'+new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })+'</span>'}
       </div>
       <div style="padding:1.2rem">
         <h2 style="font-size:1.5rem;font-weight:900;margin-bottom:0.3rem">${e.title}</h2>
         <div style="color:var(--primary);font-weight:600;margin-bottom:0.5rem">📍 ${e.venue || 'Venue'}</div>
         <div style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem">🕐 ${new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
         <p style="font-size:0.9rem;line-height:1.6;color:rgba(240,230,255,0.8)">${e.description || 'Una experiencia cósmica única te espera.'}</p>
-        <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap">${(e.tags || []).map(t => `<span class="badge badge-glass">${t}</span>`).join('')}</div>
+        <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap">
+          <span class="badge badge-glass">${e.status}</span>
+          <span class="badge badge-glass">📍 ${e.city || 'Sin ciudad'}</span>
+        </div>
       </div>
     </div>
 
-    <div class="section-header"><span class="section-title">Capacidad</span><span class="text-muted text-sm">${sold} / ${e.capacity || 1000}</span></div>
-    <div class="progress-bar" style="margin-bottom:1.2rem;background:rgba(209,37,244,0.1)"><div class="progress-fill" style="width:${pct}%;background:var(--primary)"></div></div>
+    <div class="section-header"><span class="section-title">Información</span></div>
+    <div style="background:var(--surface);border-radius:var(--radius-lg);padding:1rem;margin-bottom:1.2rem">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+        <div>
+          <div style="color:var(--text-muted);font-size:0.75rem;margin-bottom:0.25rem">Fecha</div>
+          <div style="font-weight:600">${new Date(e.startAt).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+        </div>
+        <div>
+          <div style="color:var(--text-muted);font-size:0.75rem;margin-bottom:0.25rem">Horario</div>
+          <div style="font-weight:600">${new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
+        </div>
+      </div>
+    </div>
 
-    <div class="section-header"><span class="section-title">Lineup</span></div>
-    ${(e.lineup || []).map(name => {
-      return `<div class="list-item">
-        <div class="list-icon">🎵</div>
-        <div class="list-body"><div class="list-title">${name}</div><div class="list-subtitle">Artista invitado</div></div>
-        <span style="color:var(--primary);font-size:1.1rem">›</span>
-      </div>`;
-    }).join('')}
+    <div class="section-header"><span class="section-title">Organización</span></div>
+    <div style="background:var(--surface);border-radius:var(--radius-lg);padding:1rem;margin-bottom:1.2rem">
+      <div style="display:flex;align-items:center;gap:0.75rem">
+        <div style="width:40px;height:40px;background:var(--primary);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:white">
+          ${(e.organization?.name || 'O')[0].toUpperCase()}
+        </div>
+        <div>
+          <div style="font-weight:600">${e.organization?.name || 'Organización'}</div>
+          <div style="color:var(--text-muted);font-size:0.85rem">ID: ${e.organization?.id || 'N/A'}</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:1rem;margin-top:2rem">
+      <button class="btn btn-primary" style="flex:1" onclick="navigate('tickets','${e.id}')">🎫 Comprar Entradas</button>
+      <button class="btn btn-outline" onclick="navigate('events')">← Ver Todos</button>
+    </div>}
 
     <div style="margin-top:1.5rem">
       <button class="btn btn-primary btn-full" onclick="navigate('tickets','${e.id}')">🎫 Comprar Entradas</button>

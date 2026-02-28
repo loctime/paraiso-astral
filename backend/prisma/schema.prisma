@@ -89,29 +89,36 @@ model Membership {
 }
 
 model Event {
-  id             String      @id @default(cuid())
-  organizationId String
-  title          String
-  venue          String
-  address        String?
-  city           String?
-  startAt        DateTime
-  endAt          DateTime?
-  status         EventStatus @default(DRAFT)
-  capacityTotal  Int?
+  id              String        @id @default(cuid())
+  organizationId  String
+  title           String
+  slug            String        @unique
+  description     String
+  coverImage      String?
+  startAt         DateTime
+  endAt           DateTime?
+  venue           String
+  address         String?
+  city            String?
+  country         String?
+  status          EventStatus   @default(DRAFT)
+  isPublic        Boolean       @default(true)
+  isFeatured      Boolean       @default(false)
+  capacityTotal   Int?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  ticketTypes   TicketType[]
-  orders        Order[]
-  tickets       Ticket[]
-  scans         TicketScan[]
-  orderItems    OrderItem[]
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  ticketTypes     TicketType[]
+  orders          Order[]
+  tickets         Ticket[]
+  scans           TicketScan[]
+  orderItems      OrderItem[]
 
-  @@index([organizationId, startAt])
-  @@index([organizationId, status])
+  @@index([organizationId])
+  @@index([status])
+  @@index([startAt])
 }
 
 model TicketType {
