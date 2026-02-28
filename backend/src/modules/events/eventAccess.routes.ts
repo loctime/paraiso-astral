@@ -69,14 +69,14 @@ router.post('/attendee', async (req: Request, res: Response) => {
     const result = await EventAccessService.grantAttendeeAccess(input, firebaseUid);
 
     if (result.success) {
-      res.status(200).json(result);
+      return res.status(200).json(result);
     } else {
-      res.status(400).json(result);
+      return res.status(400).json(result);
     }
 
   } catch (error) {
     console.error('Error in attendee access endpoint:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Internal server error'
     });
@@ -100,14 +100,14 @@ router.get('/:eventId/:firebaseUid', async (req: Request, res: Response) => {
 
     const access = await EventAccessService.checkEventAccess(eventId, firebaseUid);
     
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: access
     });
 
   } catch (error) {
     console.error('Error checking event access:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Internal server error'
     });

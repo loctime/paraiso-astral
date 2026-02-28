@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/prisma';
-import { MembershipRole } from '../types/auth';
+import { MembershipRole } from '@prisma/client';
 
 export const resolveOrganization = async (
   req: Request,
@@ -41,6 +41,10 @@ export const resolveOrganization = async (
             name: true,
             slug: true,
             status: true,
+            createdAt: true,
+            updatedAt: true,
+            timezone: true,
+            currency: true,
           },
         },
       },

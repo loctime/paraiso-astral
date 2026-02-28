@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AuthService } from '../modules/auth/auth.service';
+import { auth } from '../config/firebase';
 import { prisma } from '../config/prisma';
 
 export const requireAuth = async (
@@ -8,7 +8,7 @@ export const requireAuth = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // Leer Authorization: Bearer <token>
+    // Leer Authorization: Bearer <firebase-id-token>
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -18,14 +18,23 @@ export const requireAuth = async (
       return;
     }
 
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    const idToken = authHeader.substring(7); // Remove 'Bearer ' prefix
 
-    // Verificar JWT
-    const payload = AuthService.verifyToken(token);
+    // Verificar Firebase ID Token
+    const decodedToken = await auth.verifyIdToken(idToken);
+    const firebaseUid = decodedToken.uid;
+    const email = decodedToken.email;
 
-    // Buscar user en DB
+    if (!email) {
+      res.status(401).json({
+        error: 'Email is required in Firebase token',
+      });
+      return;
+    }
+
+    // Buscar usuario interno en PostgreSQL por email (temporal hasta que firebaseUid esté en la DB)
     const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
+      where: { email: email.toLowerCase() },
       select: {
         id: true,
         email: true,
@@ -33,12 +42,13 @@ export const requireAuth = async (
         status: true,
         createdAt: true,
         updatedAt: true,
+        passwordHash: true,
       },
     });
 
     if (!user) {
       res.status(401).json({
-        error: 'User not found',
+        error: 'User not found in internal database',
       });
       return;
     }
@@ -50,14 +60,18 @@ export const requireAuth = async (
       return;
     }
 
-    // Adjuntar req.user
-    req.user = user;
+    // Adjuntar req.user con información de Firebase y base de datos
+    // Por ahora usamos type assertion para incluir firebaseUid
+    req.user = {
+      ...user,
+      firebaseUid: firebaseUid,
+    } as any;
     
     next();
   } catch (error) {
-    if (error instanceof Error && error.message === 'Invalid token') {
+    if (error instanceof Error && error.message.includes('Firebase')) {
       res.status(401).json({
-        error: 'Invalid token',
+        error: 'Invalid Firebase token',
       });
       return;
     }

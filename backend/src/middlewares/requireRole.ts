@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { MembershipRole } from '../types/auth';
+import { MembershipRole } from '@prisma/client';
 
 export const requireRole = (allowedRoles: MembershipRole[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {

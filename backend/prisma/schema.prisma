@@ -58,7 +58,6 @@ model Organization {
   tickets      Ticket[]
   scans        TicketScan[]
   orderItems   OrderItem[]
-
 }
 
 model User {
@@ -66,6 +65,7 @@ model User {
   email        String   @unique
   name         String
   passwordHash String
+  firebaseUid  String?  @unique
   status       String   @default("active")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

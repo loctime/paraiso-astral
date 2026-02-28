@@ -1,12 +1,11 @@
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { env } from './config/env';
-import { authRoutes } from './modules/auth/auth.routes';
 import { eventAccessRoutes } from './modules/events/eventAccess.routes';
 import { requireAuth } from './middlewares/requireAuth';
 import { resolveOrganization } from './middlewares/resolveOrganization';
 import { requireRole } from './middlewares/requireRole';
-import { MembershipRole } from './types/auth';
+import { MembershipRole } from '@prisma/client';
 
 // Global error handler interface
 interface AppError extends Error {
@@ -94,8 +93,8 @@ export const createApp = (): Application => {
   // Version endpoint
   app.get('/api/version', version);
 
-  // Auth routes
-  app.use('/api/auth', authRoutes);
+  // Auth routes (removed - now using Firebase)
+  // app.use('/api/auth', authRoutes);
 
   // Public event access routes
   app.use('/public/event-access', eventAccessRoutes);

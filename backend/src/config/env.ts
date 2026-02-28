@@ -6,8 +6,6 @@ interface Env {
   PORT: number;
   NODE_ENV: string;
   DATABASE_URL: string;
-  JWT_SECRET: string;
-  JWT_EXPIRES_IN: string;
   CORS_ORIGIN: string;
   SMTP_HOST?: string;
   SMTP_PORT?: number;
@@ -20,7 +18,7 @@ interface Env {
 
 // Validar variables de entorno críticas
 const validateRequiredEnvVars = (): void => {
-  const requiredEnvVars: (keyof Env)[] = ['DATABASE_URL', 'JWT_SECRET'];
+  const requiredEnvVars: (keyof Env)[] = ['DATABASE_URL'];
   
   for (const envVar of requiredEnvVars) {
     const value = process.env[envVar];
@@ -54,16 +52,6 @@ const validateDatabaseUrl = (url: string): void => {
   // Dejar que Prisma valide el resto (SSL params, encoded chars, etc.)
 };
 
-// Validar JWT_SECRET
-const validateJwtSecret = (secret: string, nodeEnv: string): void => {
-  if (secret.length < 32) {
-    throw new Error('❌ JWT_SECRET must be at least 32 characters long for security');
-  }
-  
-  if (nodeEnv === 'production' && secret.length < 64) {
-    throw new Error('❌ JWT_SECRET must be at least 64 characters long in production');
-  }
-};
 
 // Validar configuración SMTP
 const validateSmtpConfig = (host?: string, port?: string, user?: string, pass?: string): {
@@ -124,9 +112,6 @@ function loadEnv(): Env {
   const databaseUrl = process.env.DATABASE_URL!;
   validateDatabaseUrl(databaseUrl);
 
-  const jwtSecret = process.env.JWT_SECRET!;
-  validateJwtSecret(jwtSecret, nodeEnv);
-
   const port = validatePort(process.env.PORT);
 
   const corsOrigin = validateCorsOrigin(process.env.CORS_ORIGIN, nodeEnv);
@@ -142,8 +127,6 @@ function loadEnv(): Env {
     PORT: port,
     NODE_ENV: nodeEnv,
     DATABASE_URL: databaseUrl,
-    JWT_SECRET: jwtSecret,
-    JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
     CORS_ORIGIN: corsOrigin,
     SMTP_HOST: smtpConfig.host,
     SMTP_PORT: smtpConfig.port,
