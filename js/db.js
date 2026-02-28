@@ -121,15 +121,30 @@ const DATABASE = {
     projection: 5800,
     chartData: [40, 65, 90, 55, 75, 100, 85],
     chartLabels: ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"],
+  },
+  
+  // Métodos de utilidad
+  getEventRevenue: function(eventId) {
+    const e = this.events.find(x => x.id === eventId);
+    if (!e) return 0;
+    return e.soldGeneral * e.ticketGeneral + e.soldVIP * e.ticketVIP + e.soldBackstage * e.ticketBackstage;
+  },
+  
+  getTotalSold: function(eventId) {
+    const e = this.events.find(x => x.id === eventId);
+    if (!e) return 0;
+    return e.soldGeneral + e.soldVIP + e.soldBackstage;
+  },
+  
+  // Estado global
+  state: {
+    selectedTicketType: 'general',
+    selectedEvent: null,
+    unreadNotifs: 0
   }
 };
 
-// Inicializar la API con los datos
-if (typeof API !== 'undefined') {
-  API.initData(DATABASE);
-}
-
-// Exportar para compatibilidad temporal
+// Exportar para uso global
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = DATABASE;
 } else {

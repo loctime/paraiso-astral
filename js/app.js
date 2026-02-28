@@ -2,10 +2,8 @@
 
 // ── ROUTER ──────────────────────────────────────────────────────────────────
 function navigate(pageId, data) {
-  // Usar el store para navegación
-  if (typeof Store !== 'undefined' && Store.navigate) {
-    Store.navigate(pageId, data);
-  }
+  // Navegación simple sin Store
+  console.log('Navegando a:', pageId, data);
   
   // Actualizar UI
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -37,11 +35,11 @@ function closeModal(id) { document.getElementById(id).classList.remove('show'); 
 
 // ── HOME PAGE ────────────────────────────────────────────────────────────────
 function renderHome() {
-  // Usar API para obtener datos
-  const featured = typeof API !== 'undefined' ? API.getFeaturedEvent() : null;
-  const liveEvent = typeof API !== 'undefined' ? API.getLiveEvent() : null;
-  const upcomingEvents = typeof API !== 'undefined' ? API.getUpcomingEvents(3) : [];
-  const recentNews = typeof API !== 'undefined' ? API.getNews(4) : [];
+  // Usar DATABASE directamente para obtener datos
+  const featured = DATABASE.events.find(e => e.status === 'featured') || DATABASE.events[0];
+  const liveEvent = DATABASE.events.find(e => e.status === 'live');
+  const upcomingEvents = DATABASE.events.filter(e => e.status === 'upcoming').slice(0, 3);
+  const recentNews = DATABASE.news ? DATABASE.news.slice(0, 4) : [];
   
   const el = document.getElementById('page-home');
   const content = el.querySelector('.page-content');
@@ -123,8 +121,12 @@ function renderEventCardMini(e) {
 function renderEvents(filter = 'upcoming') {
   const el = document.getElementById('page-events');
   const content = el.querySelector('.page-content');
-  // Usar API para obtener eventos
-  const events = typeof API !== 'undefined' ? API.getEvents({ status: filter === 'past' ? 'past' : filter === 'live' ? 'live' : 'upcoming' }) : [];
+  // Usar DATABASE directamente para obtener eventos
+  const events = DATABASE.events.filter(e => {
+    if (filter === 'past') return new Date(e.date) < new Date();
+    if (filter === 'live') return e.status === 'live';
+    return e.status === 'upcoming';
+  });
 
   content.innerHTML = `
     <div class="tabs">
@@ -148,14 +150,19 @@ function renderEvents(filter = 'upcoming') {
 }
 
 function renderCalendar() {
-  // Usar store para estado del calendario
-  const year = typeof Store !== 'undefined' ? Store.state.calendarYear : 2024;
-  const month = typeof Store !== 'undefined' ? Store.state.calendarMonth : 9;
+  // Valores por defecto sin Store
+  const year = 2024;
+  const month = 9;
   const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
-  // Usar API para eventos del calendario
-  const eventDays = typeof API !== 'undefined' ? API.getEventDaysInMonth(year, month) : [];
+  // Usar DATABASE para eventos del calendario
+  const eventDays = DATABASE.events
+    .filter(e => {
+      const eventDate = new Date(e.date);
+      return eventDate.getFullYear() === year && eventDate.getMonth() === month;
+    })
+    .map(e => new Date(e.date).getDate());
 
   let cells = '';
   for (let i = 0; i < firstDay; i++) cells += `<div class="cal-day other-month">${new Date(year, month, -firstDay + i + 1).getDate()}</div>`;
@@ -180,29 +187,31 @@ function renderCalendar() {
 }
 
 function changeCalMonth(dir) {
-  if (typeof Store !== 'undefined') {
-    Store.changeCalendarMonth(dir);
-  }
+  // Sin Store por ahora
   renderEvents();
 }
 
 function filterEventsByDay(day) {
-  const year = typeof Store !== 'undefined' ? Store.state.calendarYear : 2024;
-  const month = typeof Store !== 'undefined' ? Store.state.calendarMonth : 9;
+  const year = 2024;
+  const month = 9;
   const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-  const filtered = typeof API !== 'undefined' ? API.getEvents({ date: dateStr }) : [];
+  const filtered = DATABASE.events.filter(e => e.date === dateStr);
   const list = document.getElementById('events-list');
   if (list) list.innerHTML = filtered.length === 0 ? '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos este día</div></div>' : filtered.map(e => renderEventCardFull(e)).join('');
 }
 
 function filterEvents(query) {
-  const filtered = typeof API !== 'undefined' ? API.getEvents({ search: query }) : [];
+  const filtered = DATABASE.events.filter(e => 
+    e.title.toLowerCase().includes(query.toLowerCase()) ||
+    e.venue.toLowerCase().includes(query.toLowerCase()) ||
+    e.lineup.some(artist => artist.toLowerCase().includes(query.toLowerCase()))
+  );
   const list = document.getElementById('events-list');
   if (list) list.innerHTML = filtered.length === 0 ? '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Sin resultados</div></div>' : filtered.map(e => renderEventCardFull(e)).join('');
 }
 
 function renderEventCardFull(e) {
-  const rev = typeof API !== 'undefined' ? API.getEventRevenue(e.id) : 0;
+  const rev = e.soldGeneral * e.ticketGeneral + e.soldVIP * e.ticketVIP + e.soldBackstage * e.ticketBackstage;
   return `
     <div class="event-card" onclick="navigate('event-detail', ${e.id})">
       <div class="event-img-placeholder star-bg" style="height:160px">${e.flyer}</div>
@@ -227,14 +236,14 @@ function renderEventCardFull(e) {
 
 // ── EVENT DETAIL ─────────────────────────────────────────────────────────────
 function renderEventDetail(eventId) {
-  const e = DB.events.find(x => x.id === eventId);
+  const e = DATABASE.events.find(x => x.id === eventId);
   if (!e) return;
   const el = document.getElementById('page-event-detail');
   const content = el.querySelector('.page-content');
-  const rev = DB.getEventRevenue(e.id);
-  const sold = DB.getTotalSold(e.id);
+  const rev = DATABASE.getEventRevenue(e.id);
+  const sold = DATABASE.getTotalSold(e.id);
   const pct = Math.round((sold / e.capacity) * 100);
-  const artists = DB.artists.filter(a => e.lineup.includes(a.name));
+  const artists = DATABASE.artists.filter(a => e.lineup.includes(a.name));
 
   content.innerHTML = `
     <button onclick="navigate('events')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
@@ -264,7 +273,7 @@ function renderEventDetail(eventId) {
 
     <div class="section-header"><span class="section-title">Lineup</span></div>
     ${e.lineup.map(name => {
-      const a = DB.artists.find(x => x.name === name);
+      const a = DATABASE.artists.find(x => x.name === name);
       return `<div class="list-item" onclick="${a ? `navigate('artist-detail',${a.id})` : ''}">
         <div class="list-icon">${a ? a.emoji : '🎵'}</div>
         <div class="list-body"><div class="list-title">${name}</div><div class="list-subtitle">${a ? a.genre : 'Artista invitado'}</div></div>
@@ -280,7 +289,7 @@ function renderEventDetail(eventId) {
 }
 
 function shareEvent(id) {
-  const e = DB.events.find(x => x.id === id);
+  const e = DATABASE.events.find(x => x.id === id);
   if (navigator.share) navigator.share({ title: e.title, text: `${e.title} - ${e.venue}`, url: window.location.href });
   else { navigator.clipboard.writeText(`${e.title} - ${e.venue}`).then(() => toast('📋 Copiado al portapapeles!')); }
 }
@@ -290,8 +299,8 @@ function renderArtists(filter = 'all') {
   const el = document.getElementById('page-artists');
   const content = el.querySelector('.page-content');
   const genres = ['all', 'Techno', 'Psytrance', 'Ambient', 'House'];
-  let artists = DB.artists;
-  if (filter !== 'all') artists = DB.artists.filter(a => a.genre.toLowerCase().includes(filter.toLowerCase()));
+  let artists = DATABASE.artists;
+  if (filter !== 'all') artists = DATABASE.artists.filter(a => a.genre.toLowerCase().includes(filter.toLowerCase()));
 
   content.innerHTML = `
     <div style="display:flex;gap:0.5rem;overflow-x:auto;margin-bottom:1.2rem;padding-bottom:0.3rem">
@@ -313,7 +322,7 @@ function renderArtists(filter = 'all') {
 
     <div class="section-header" style="margin-top:1.5rem"><span class="section-title">Top Performers</span></div>
     <div class="h-scroll">
-      ${DB.artists.sort((a,b) => b.followers - a.followers).slice(0,6).map((a,i) => `
+      ${DATABASE.artists.sort((a,b) => b.followers - a.followers).slice(0,6).map((a,i) => `
         <div class="circle-avatar" onclick="navigate('artist-detail',${a.id})">
           <div class="circle-avatar-img ${i===0?'active-border':''}">${a.emoji}</div>
           <div class="circle-avatar-name">${a.name.split(' ')[0]}</div>
@@ -324,11 +333,11 @@ function renderArtists(filter = 'all') {
 
 // ── ARTIST DETAIL ─────────────────────────────────────────────────────────────
 function renderArtistDetail(artistId) {
-  const a = DB.artists.find(x => x.id === artistId);
+  const a = DATABASE.artists.find(x => x.id === artistId);
   if (!a) return;
   const el = document.getElementById('page-artist-detail');
   const content = el.querySelector('.page-content');
-  const artistEvents = DB.events.filter(e => e.lineup.includes(a.name));
+  const artistEvents = DATABASE.events.filter(e => e.lineup.includes(a.name));
 
   content.innerHTML = `
     <button onclick="navigate('artists')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
@@ -362,7 +371,7 @@ function renderArtistDetail(artistId) {
 
 // ── TICKETS PAGE ──────────────────────────────────────────────────────────────
 function renderTicketsPage(eventId) {
-  const e = DB.events.find(x => x.id === eventId) || DB.events[0];
+  const e = DATABASE.events.find(x => x.id === eventId) || DATABASE.events[0];
   const el = document.getElementById('page-tickets');
   const content = el.querySelector('.page-content');
 
@@ -388,7 +397,7 @@ function renderTicketsPage(eventId) {
       { type: 'vip', label: 'VIP Astral Pass ✦', desc: 'Acceso backstage, VIP lounge & Fast track', price: e.ticketVIP, avail: 'Limitado', remaining: Math.max(0, 200 - e.soldVIP) },
       { type: 'backstage', label: 'Backstage Pass 👑', desc: 'Acceso total + meet & greet artistas', price: e.ticketBackstage, avail: 'Exclusivo', remaining: Math.max(0, 50 - e.soldBackstage) },
     ].map(t => `
-      <div class="ticket ${DB.state.selectedTicketType === t.type ? 'selected' : ''}" onclick="selectTicket('${t.type}')" style="margin-bottom:0.75rem">
+      <div class="ticket ${DATABASE.state.selectedTicketType === t.type ? 'selected' : ''}" onclick="selectTicket('${t.type}')" style="margin-bottom:0.75rem">
         <div class="ticket-inner">
           <div>
             <div style="font-weight:800;font-size:1rem">${t.label}</div>
@@ -422,8 +431,8 @@ function renderTicketsPage(eventId) {
 }
 
 function selectTicket(type) {
-  DB.state.selectedTicketType = type;
-  const eventId = DB.state.selectedEvent;
+  DATABASE.state.selectedTicketType = type;
+  const eventId = DATABASE.state.selectedEvent;
   renderTicketsPage(eventId);
 }
 
@@ -440,9 +449,9 @@ function purchaseTicket(eventId) {
 
 // ── PAYMENT MODAL ─────────────────────────────────────────────────────────────
 function renderPaymentModal() {
-  const e = DB.events.find(x => x.id === DB.state.selectedEvent) || DB.events[0];
+  const e = DATABASE.events.find(x => x.id === DATABASE.state.selectedEvent) || DATABASE.events[0];
   const typeMap = { general: { label: 'Acceso General', price: e.ticketGeneral }, vip: { label: 'VIP Astral Pass', price: e.ticketVIP }, backstage: { label: 'Backstage Pass', price: e.ticketBackstage } };
-  const t = typeMap[DB.state.selectedTicketType] || typeMap.general;
+  const t = typeMap[DATABASE.state.selectedTicketType] || typeMap.general;
   const modal = document.getElementById('modal-payment');
   modal.querySelector('.bottom-sheet').innerHTML = `
     <div class="sheet-handle"></div>
@@ -466,11 +475,11 @@ function renderPaymentModal() {
 function confirmPayment() {
   closeModal('modal-payment');
   toast('🎉 ¡Entrada comprada exitosamente!');
-  const e = DB.events.find(x => x.id === DB.state.selectedEvent);
+  const e = DATABASE.events.find(x => x.id === DATABASE.state.selectedEvent);
   if (e) {
-    if (DB.state.selectedTicketType === 'general') e.soldGeneral++;
-    if (DB.state.selectedTicketType === 'vip') e.soldVIP++;
-    if (DB.state.selectedTicketType === 'backstage') e.soldBackstage++;
+    if (DATABASE.state.selectedTicketType === 'general') e.soldGeneral++;
+    if (DATABASE.state.selectedTicketType === 'vip') e.soldVIP++;
+    if (DATABASE.state.selectedTicketType === 'backstage') e.soldBackstage++;
   }
 }
 
@@ -484,7 +493,7 @@ function renderNews() {
       <input class="input" type="text" placeholder="Buscar noticias..." oninput="filterNews(this.value)" />
     </div>
     <div id="news-list">
-      ${DB.news.map(n => `
+      ${DATABASE.news.map(n => `
         <div class="list-item" onclick="navigate('news-detail',${n.id})">
           <div class="list-icon" style="font-size:1.5rem">${n.emoji}</div>
           <div class="list-body">
@@ -499,13 +508,13 @@ function renderNews() {
 }
 
 function filterNews(q) {
-  const filtered = DB.news.filter(n => n.title.toLowerCase().includes(q.toLowerCase()) || n.category.toLowerCase().includes(q.toLowerCase()));
+  const filtered = DATABASE.news.filter(n => n.title.toLowerCase().includes(q.toLowerCase()) || n.category.toLowerCase().includes(q.toLowerCase()));
   const list = document.getElementById('news-list');
   if (list) list.innerHTML = filtered.map(n => `<div class="list-item" onclick="navigate('news-detail',${n.id})"><div class="list-icon" style="font-size:1.5rem">${n.emoji}</div><div class="list-body"><div style="font-size:0.6rem;color:var(--primary);text-transform:uppercase;font-weight:700">${n.category}</div><div class="list-title">${n.title}</div></div></div>`).join('');
 }
 
 function renderNewsDetail(newsId) {
-  const n = DB.news.find(x => x.id === newsId);
+  const n = DATABASE.news.find(x => x.id === newsId);
   if (!n) return;
   const el = document.getElementById('page-news-detail');
   const content = el.querySelector('.page-content');
@@ -530,11 +539,11 @@ function renderNotifications() {
   const content = el.querySelector('.page-content');
   content.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-      <span style="font-size:0.8rem;color:var(--text-muted)">${DB.notifications.filter(n=>n.unread).length} sin leer</span>
+      <span style="font-size:0.8rem;color:var(--text-muted)">${DATABASE.notifications.filter(n=>n.unread).length} sin leer</span>
       <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.3rem 0.75rem" onclick="markAllRead()">Marcar todo</button>
     </div>
     <div id="notif-list">
-      ${DB.notifications.map(n => `
+      ${DATABASE.notifications.map(n => `
         <div class="notif-item ${n.unread ? 'unread' : ''}" onclick="markRead(${n.id})">
           ${n.unread ? '<div class="notif-dot-badge"></div>' : '<div style="width:8px;flex-shrink:0"></div>'}
           <div class="notif-body">
@@ -547,21 +556,21 @@ function renderNotifications() {
 }
 
 function markRead(id) {
-  const n = DB.notifications.find(x => x.id === id);
+  const n = DATABASE.notifications.find(x => x.id === id);
   if (n) { n.unread = false; }
   updateNotifBadge();
   renderNotifications();
 }
 
 function markAllRead() {
-  DB.notifications.forEach(n => n.unread = false);
+  DATABASE.notifications.forEach(n => n.unread = false);
   updateNotifBadge();
   renderNotifications();
 }
 
 function updateNotifBadge() {
-  const count = DB.notifications.filter(n => n.unread).length;
-  DB.state.unreadNotifs = count;
+  const count = DATABASE.notifications.filter(n => n.unread).length;
+  DATABASE.state.unreadNotifs = count;
   const dot = document.querySelector('.notif-dot');
   if (dot) dot.style.display = count > 0 ? 'block' : 'none';
 }
@@ -570,10 +579,10 @@ function updateNotifBadge() {
 function renderAdmin() {
   const el = document.getElementById('page-admin');
   const content = el.querySelector('.page-content');
-  const s = DB.adminStats;
+  const s = DATABASE.adminStats;
 
-  const totalRev = DB.events.reduce((sum, e) => sum + DB.getEventRevenue(e.id), 0);
-  const totalSold = DB.events.reduce((sum, e) => sum + DB.getTotalSold(e.id), 0);
+  const totalRev = DATABASE.events.reduce((sum, e) => sum + DATABASE.getEventRevenue(e.id), 0);
+  const totalSold = DATABASE.events.reduce((sum, e) => sum + DATABASE.getTotalSold(e.id), 0);
 
   content.innerHTML = `
     <div class="admin-header-card">
@@ -592,7 +601,7 @@ function renderAdmin() {
       <div class="stat-card glow-card"><div class="stat-label">Ingresos Totales</div><div class="stat-value">$${(totalRev/1000).toFixed(0)}k</div><div class="stat-change stat-up">📈 +${s.revenueChange}%</div></div>
       <div class="stat-card"><div class="stat-label">Asistencia</div><div class="stat-value">${(s.attendance).toLocaleString()}</div><div class="stat-change stat-up">📈 +${s.attendanceChange}%</div></div>
       <div class="stat-card"><div class="stat-label">Entradas</div><div class="stat-value">${(totalSold/1000).toFixed(1)}k</div><div class="stat-change stat-up">📈 +${s.ticketsChange}%</div></div>
-      <div class="stat-card"><div class="stat-label">RRPP Activos</div><div class="stat-value">${DB.rrpp.filter(r=>r.active).length}</div><div class="stat-change stat-up">👥 Total: ${DB.rrpp.length}</div></div>
+      <div class="stat-card"><div class="stat-label">RRPP Activos</div><div class="stat-value">${DATABASE.rrpp.filter(r=>r.active).length}</div><div class="stat-change stat-up">👥 Total: ${DATABASE.rrpp.length}</div></div>
     </div>
 
     <div class="section-header"><span class="section-title">Ventas de Tickets</span></div>
@@ -640,7 +649,7 @@ function renderAdmin() {
     </div>
 
     <div class="section-header"><span class="section-title">Top RRPP</span><a class="section-link" onclick="navigate('rrpp')">Ver todos</a></div>
-    ${DB.rrpp.sort((a,b) => b.revenue - a.revenue).slice(0,3).map(r => `
+    ${DATABASE.rrpp.sort((a,b) => b.revenue - a.revenue).slice(0,3).map(r => `
       <div class="rrpp-card" onclick="navigate('rrpp-detail',${r.id})">
         <div class="rrpp-avatar">${r.name[0]}</div>
         <div class="rrpp-info"><div class="rrpp-name">${r.name}</div><div class="rrpp-stats">🎫 ${r.sold} vendidas · ${r.active ? '✅ Activo':'❌ Inactivo'}</div></div>
@@ -655,7 +664,7 @@ function renderAdmin() {
 }
 
 function exportData() {
-  const data = { events: DB.events, rrpp: DB.rrpp, stats: DB.adminStats, exportDate: new Date().toISOString() };
+  const data = { events: DATABASE.events, rrpp: DATABASE.rrpp, stats: DATABASE.adminStats, exportDate: new Date().toISOString() };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = 'paraiso-astral-export.json'; a.click();
@@ -667,16 +676,16 @@ function exportData() {
 function renderRRPP() {
   const el = document.getElementById('page-rrpp');
   const content = el.querySelector('.page-content');
-  const totalRev = DB.rrpp.reduce((s, r) => s + r.revenue, 0);
-  const totalComm = DB.rrpp.reduce((s, r) => s + r.earned, 0);
-  const totalSold = DB.rrpp.reduce((s, r) => s + r.sold, 0);
+  const totalRev = DATABASE.rrpp.reduce((s, r) => s + r.revenue, 0);
+  const totalComm = DATABASE.rrpp.reduce((s, r) => s + r.earned, 0);
+  const totalSold = DATABASE.rrpp.reduce((s, r) => s + r.sold, 0);
 
   content.innerHTML = `
     <div class="stats-grid" style="margin-bottom:1.5rem">
       <div class="stat-card"><div class="stat-label">Revenue RRPP</div><div class="stat-value" style="font-size:1.1rem">$${(totalRev/1000).toFixed(1)}k</div></div>
       <div class="stat-card"><div class="stat-label">Comisiones</div><div class="stat-value" style="font-size:1.1rem;color:var(--green)">$${totalComm.toFixed(0)}</div></div>
       <div class="stat-card"><div class="stat-label">Entradas</div><div class="stat-value" style="font-size:1.1rem">${totalSold}</div></div>
-      <div class="stat-card"><div class="stat-label">RRPP Activos</div><div class="stat-value" style="font-size:1.1rem">${DB.rrpp.filter(r=>r.active).length}</div></div>
+      <div class="stat-card"><div class="stat-label">RRPP Activos</div><div class="stat-value" style="font-size:1.1rem">${DATABASE.rrpp.filter(r=>r.active).length}</div></div>
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
@@ -684,7 +693,7 @@ function renderRRPP() {
       <button class="btn btn-primary" style="padding:0.4rem 0.9rem;font-size:0.8rem" onclick="openModal('modal-add-rrpp')">+ Agregar</button>
     </div>
 
-    ${DB.rrpp.map(r => `
+    ${DATABASE.rrpp.map(r => `
       <div class="rrpp-card" onclick="navigate('rrpp-detail',${r.id})">
         <div class="rrpp-avatar" style="opacity:${r.active?1:0.5}">${r.name[0]}</div>
         <div class="rrpp-info">
@@ -705,7 +714,7 @@ function renderRRPP() {
 }
 
 function renderRRPPDetail(rrppId) {
-  const r = DB.rrpp.find(x => x.id === rrppId);
+  const r = DATABASE.rrpp.find(x => x.id === rrppId);
   if (!r) return;
   const el = document.getElementById('page-rrpp-detail');
   const content = el.querySelector('.page-content');
@@ -743,7 +752,7 @@ function renderRRPPDetail(rrppId) {
 }
 
 function toggleRRPP(id) {
-  const r = DB.rrpp.find(x => x.id === id);
+  const r = DATABASE.rrpp.find(x => x.id === id);
   if (r) { r.active = !r.active; toast(r.active ? '✅ RRPP activado' : '❌ RRPP desactivado'); renderRRPPDetail(id); }
 }
 
@@ -768,7 +777,7 @@ function addRRPP() {
   const phone = document.getElementById('rrpp-phone').value.trim();
   const comm = parseFloat(document.getElementById('rrpp-comm').value) / 100;
   if (!name || !email) { toast('⚠️ Completa nombre y email'); return; }
-  DB.rrpp.push({ id: Date.now(), name, email, phone, commission: comm || 0.15, sold: 0, revenue: 0, earned: 0, joinDate: new Date().toISOString().slice(0,10), active: true, sales: [] });
+  DATABASE.rrpp.push({ id: Date.now(), name, email, phone, commission: comm || 0.15, sold: 0, revenue: 0, earned: 0, joinDate: new Date().toISOString().slice(0,10), active: true, sales: [] });
   closeModal('modal-add-rrpp');
   toast(`✅ ${name} agregado como RRPP!`);
   renderRRPP();
@@ -789,10 +798,10 @@ function renderProfile() {
     </div>
 
     <div class="stats-grid" style="margin-bottom:1.5rem">
-      <div class="stat-card" style="text-align:center"><div class="stat-label">Eventos</div><div class="stat-value">${DB.events.length}</div></div>
-      <div class="stat-card" style="text-align:center"><div class="stat-label">Artistas</div><div class="stat-value">${DB.artists.length}</div></div>
-      <div class="stat-card" style="text-align:center"><div class="stat-label">RRPP</div><div class="stat-value">${DB.rrpp.length}</div></div>
-      <div class="stat-card" style="text-align:center"><div class="stat-label">Noticias</div><div class="stat-value">${DB.news.length}</div></div>
+      <div class="stat-card" style="text-align:center"><div class="stat-label">Eventos</div><div class="stat-value">${DATABASE.events.length}</div></div>
+      <div class="stat-card" style="text-align:center"><div class="stat-label">Artistas</div><div class="stat-value">${DATABASE.artists.length}</div></div>
+      <div class="stat-card" style="text-align:center"><div class="stat-label">RRPP</div><div class="stat-value">${DATABASE.rrpp.length}</div></div>
+      <div class="stat-card" style="text-align:center"><div class="stat-label">Noticias</div><div class="stat-value">${DATABASE.news.length}</div></div>
     </div>
 
     <div class="section-title font-display" style="margin-bottom:0.75rem">Configuración</div>
@@ -847,7 +856,7 @@ function addEvent() {
   if (!title || !venue || !date) { toast('⚠️ Completa los campos requeridos'); return; }
   const d = new Date(date);
   const months = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
-  DB.events.push({
+  DATABASE.events.push({
     id: Date.now(), title, venue, date,
     time: document.getElementById('ev-time').value || "22:00 - 06:00",
     month: months[d.getMonth()], day: String(d.getDate()).padStart(2,'0'),
@@ -874,25 +883,11 @@ window.addEventListener('DOMContentLoaded', () => {
       console.log('DATABASE cargado');
     }
     
-    // Asegurar que Store esté disponible
-    if (typeof Store !== 'undefined') {
-      console.log('Store inicializado');
-    }
+    // Store eliminado, usando DATABASE directamente
+    console.log('Usando DATABASE directamente');
     
-    // Inicializar API con los datos (con verificación)
-    if (typeof API !== 'undefined' && typeof DATABASE !== 'undefined') {
-      if (typeof API.initData === 'function') {
-        API.initData(DATABASE);
-        console.log('API inicializado con DATABASE');
-      } else {
-        console.error('API.initData no es una función');
-        console.log('API disponible:', API);
-      }
-    } else {
-      console.error('API o DATABASE no disponibles');
-      console.log('API:', typeof API);
-      console.log('DATABASE:', typeof DATABASE);
-    }
+    // DATABASE ya está disponible, no se necesita inicialización
+    console.log('DATABASE cargado:', DATABASE.events.length + ' eventos disponibles');
     
     // Renderizar páginas iniciales
     renderHome();

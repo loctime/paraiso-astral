@@ -1,8 +1,8 @@
 // ===== SERVICE WORKER AVANZADO - PARAÍSO ASTRAL =====
 
-const CACHE_NAME = 'paraiso-astral-v2';
-const APP_SHELL_CACHE = 'paraiso-shell-v2';
-const RUNTIME_CACHE = 'paraiso-runtime-v2';
+const CACHE_NAME = 'paraiso-astral-v3';
+const APP_SHELL_CACHE = 'paraiso-shell-v3';
+const RUNTIME_CACHE = 'paraiso-runtime-v3';
 
 // App Shell - archivos críticos que siempre deben estar disponibles
 const APP_SHELL_FILES = [
@@ -11,10 +11,6 @@ const APP_SHELL_FILES = [
   '/styles/base.css',
   '/styles/theme.css', 
   '/styles/components.css',
-  '/js/core/store.js',
-  '/js/core/api.js',
-  '/js/core/auth.js',
-  '/js/core/router.js',
   '/js/app.js',
   '/js/db.js',
   '/manifest.json'
