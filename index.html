@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#d125f4" />
+  <meta name="description" content="Paraíso Astral - Tu portal cósmico de música electrónica" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Paraíso Astral" />
+  <link rel="manifest" href="manifest.json" />
+  <title>Paraíso Astral</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ════ HEADER ════ -->
+  <header class="app-header">
+    <div class="logo">
+      <div class="logo-icon">🌌</div>
+      <div>
+        <div class="logo-text">PARAÍSO ASTRAL</div>
+        <div class="logo-sub">Electronic Universe</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" onclick="navigate('notifications')">
+        🔔
+        <span class="notif-dot" id="notif-dot"></span>
+      </button>
+      <button class="icon-btn" onclick="navigate('profile')">👤</button>
+    </div>
+  </header>
+
+  <!-- ════ PAGES ════ -->
+
+  <!-- HOME -->
+  <div class="page" id="page-home">
+    <div class="page-content fade-in"></div>
+  </div>
+
+  <!-- EVENTS -->
+  <div class="page" id="page-events">
+    <div class="page-content fade-in"></div>
+  </div>
+
+  <!-- EVENT DETAIL -->
+  <div class="page" id="page-event-detail">
+    <div class="page-content fade-in"></div>
+  </div>
+
+  <!-- ARTISTS -->
+  <div class="page" id="page-artists">
+    <div class="page-content fade-in"></div>
+  </div>
+
+  <!-- ARTIST DETAIL -->
+  <div class="page" id="page-artist-detail">
+    <div class="page-content fade-in"></div>
+  </div>
+
+  <!-- TICKETS -->
+  <div class="page" id="page-tickets">
+    <div class="page-content fade-in"></div>
+  </div>
+
+  <!-- NEWS -->
+  <div class="page" id="page-news">
+    <div class="page-content fade-in">
+      <div class="section-header"><span class="section-title">Noticias & Novedades</span></div>
+    </div>
+  </div>
+
+  <!-- NEWS DETAIL -->
+  <div class="page" id="page-news-detail">
+    <div class="page-content fade-in"></div>
+  </div>
+
+  <!-- NOTIFICATIONS -->
+  <div class="page" id="page-notifications">
+    <div class="page-content fade-in">
+      <div class="section-header"><span class="section-title">Notificaciones</span></div>
+    </div>
+  </div>
+
+  <!-- ADMIN -->
+  <div class="page" id="page-admin">
+    <div class="page-content fade-in"></div>
+  </div>
+
+  <!-- RRPP LIST -->
+  <div class="page" id="page-rrpp">
+    <div class="page-content fade-in">
+      <div class="section-header">
+        <span class="section-title">Gestión RRPP</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RRPP DETAIL -->
+  <div class="page" id="page-rrpp-detail">
+    <div class="page-content fade-in"></div>
+  </div>
+
+  <!-- PROFILE -->
+  <div class="page" id="page-profile">
+    <div class="page-content fade-in"></div>
+  </div>
+
+  <!-- ════ BOTTOM NAV ════ -->
+  <nav class="bottom-nav">
+    <button class="nav-item" data-nav="home" onclick="navigate('home')">
+      <span class="nav-icon">🏠</span>
+      <span>Inicio</span>
+    </button>
+    <button class="nav-item" data-nav="events" onclick="navigate('events')">
+      <span class="nav-icon">📅</span>
+      <span>Eventos</span>
+    </button>
+    <button class="nav-item nav-center" data-nav="tickets" onclick="navigate('tickets', 1)">
+      <div class="nav-fab">🎫</div>
+    </button>
+    <button class="nav-item" data-nav="artists" onclick="navigate('artists')">
+      <span class="nav-icon">🎵</span>
+      <span>Artistas</span>
+    </button>
+    <button class="nav-item" data-nav="admin" onclick="navigate('admin')">
+      <span class="nav-icon">📊</span>
+      <span>Admin</span>
+    </button>
+  </nav>
+
+</div><!-- /app -->
+
+<!-- ════ MODALS ════ -->
+
+<!-- Payment Modal -->
+<div class="modal-overlay" id="modal-payment" onclick="if(event.target===this)closeModal('modal-payment')">
+  <div class="bottom-sheet" id="modal-payment-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">💳 Finalizar Compra</div>
+  </div>
+</div>
+
+<!-- Add RRPP Modal -->
+<div class="modal-overlay" id="modal-add-rrpp" onclick="if(event.target===this)closeModal('modal-add-rrpp')">
+  <div class="bottom-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">👥 Nuevo RRPP</div>
+  </div>
+</div>
+
+<!-- Add Event Modal -->
+<div class="modal-overlay" id="modal-add-event" onclick="if(event.target===this)closeModal('modal-add-event')">
+  <div class="bottom-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">🎉 Nuevo Evento</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="js/db.js"></script>
+<script src="js/app.js"></script>
+<script>
+  // Patch modal content rendering after app loads
+  document.addEventListener('DOMContentLoaded', () => {
+    // Render modal contents when opened
+    const origOpen = window.openModal;
+    window.openModal = function(id) {
+      if (id === 'modal-payment') renderPaymentModal();
+      if (id === 'modal-add-rrpp') renderAddRRPPModal();
+      if (id === 'modal-add-event') renderAddEventModal();
+      document.getElementById(id).classList.add('show');
+    };
+  });
+</script>
+</body>
+</html>
