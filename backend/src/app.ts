@@ -7,6 +7,7 @@ import { requireAuth } from './middlewares/requireAuth';
 import { resolveOrganization } from './middlewares/resolveOrganization';
 import { requireRole } from './middlewares/requireRole';
 import { MembershipRole } from '@prisma/client';
+import { HttpError } from './utils/errors';
 
 // Global error handler interface
 interface AppError extends Error {
@@ -35,11 +36,34 @@ const version = (req: Request, res: Response) => {
 
 // Global error handler middleware
 const globalErrorHandler = (
-  err: AppError,
+  err: AppError | HttpError,
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
+  // Handle HttpError instances
+  if (err instanceof HttpError) {
+    const statusCode = err.statusCode;
+    const message = err.message;
+
+    console.error('HttpError:', {
+      message: err.message,
+      statusCode: err.statusCode,
+      url: req.url,
+      method: req.method,
+      timestamp: new Date().toISOString(),
+    });
+
+    res.status(statusCode).json({
+      status: 'error',
+      statusCode,
+      message,
+      ...(env.NODE_ENV === 'development' && { stack: err.stack }),
+    });
+    return;
+  }
+
+  // Handle regular errors
   const statusCode = err.statusCode || 500;
   const message = err.message || 'Internal Server Error';
 

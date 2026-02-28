@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../../config/prisma';
 import { EventPublic, EventsQueryParams, EventsResponse } from '../../types/eventPublic';
 import { EventStatus } from '@prisma/client';
+import { createBadRequestError } from '../../utils/errors';
 
 // Valid values for status parameter (only PUBLISHED allowed for public endpoint)
 const VALID_STATUSES = ['PUBLISHED'];
@@ -27,7 +28,7 @@ function validateQueryParams(query: EventsQueryParams) {
     if (query.status.toUpperCase() === 'PUBLISHED') {
       params.status = EventStatus.PUBLISHED;
     } else {
-      throw new Error('Invalid status parameter. Only PUBLISHED events are available publicly.');
+      throw createBadRequestError('Invalid status parameter. Only PUBLISHED events are available publicly.');
     }
   }
 
@@ -70,6 +71,7 @@ function validateQueryParams(query: EventsQueryParams) {
 export const getEvents = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const validatedParams = validateQueryParams(req.query as EventsQueryParams);
+    const now = new Date(); // Single instance per request
 
     // Build where clause
     const where: any = {
@@ -84,7 +86,7 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
     // Add upcoming filter (events starting from now)
     if (validatedParams.upcoming) {
       where.startAt = {
-        gte: new Date(),
+        gte: now,
       };
     }
 
