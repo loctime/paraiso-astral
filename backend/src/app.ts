@@ -32,6 +32,21 @@ const publicRateLimit = rateLimit({
   }
 });
 
+// Stricter rate limiting for ticket access endpoint
+const ticketAccessRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // 30 requests per window (stricter)
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req: Request, res: Response) => {
+    res.status(429).json({
+      status: 'error',
+      statusCode: 429,
+      message: 'Too many requests'
+    });
+  }
+});
+
 // Health check endpoint
 const healthCheck = (req: Request, res: Response) => {
   res.status(200).json({
@@ -166,14 +181,14 @@ export const createApp = (): Application => {
     next();
   });
 
-  // Health check endpoint (with rate limiting)
-  app.get('/health', publicRateLimit, healthCheck);
+  // Health check endpoint (no rate limiting)
+  app.get('/health', healthCheck);
 
   // Version endpoint (with rate limiting)
   app.get('/api/version', publicRateLimit, version);
 
-  // Public event access routes
-  app.use('/public/event-access', eventAccessRoutes);
+  // Public event access routes (with stricter rate limiting)
+  app.use('/public/event-access', ticketAccessRateLimit, eventAccessRoutes);
 
   // Public events API (with rate limiting)
   app.use('/api/events', publicRateLimit, eventsRoutes);

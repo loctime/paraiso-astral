@@ -75,7 +75,17 @@ router.post('/attendee', async (req: Request, res: Response) => {
     }
 
   } catch (error) {
-    console.error('Error in attendee access endpoint:', error);
+    // Production-safe logging - don't log sensitive data
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error in attendee access endpoint:', error);
+    } else {
+      console.error('Error in attendee access endpoint:', {
+        method: req.method,
+        url: req.originalUrl,
+        statusCode: 500,
+        timestamp: new Date().toISOString(),
+      });
+    }
     return res.status(500).json({
       success: false,
       message: 'Internal server error'
