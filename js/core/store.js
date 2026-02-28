@@ -185,6 +185,16 @@ class Store {
 // Crear instancia global del store
 const store = new Store();
 
+// Inicializar cuando el DOM esté listo
+if (typeof window !== 'undefined') {
+  window.addEventListener('DOMContentLoaded', () => {
+    // Asegurar que el store esté disponible globalmente
+    if (!window.Store) {
+      window.Store = store;
+    }
+  });
+}
+
 // Exportar para uso en módulos
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = store;

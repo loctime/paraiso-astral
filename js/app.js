@@ -3,7 +3,7 @@
 // ── ROUTER ──────────────────────────────────────────────────────────────────
 function navigate(pageId, data) {
   // Usar el store para navegación
-  if (typeof Store !== 'undefined') {
+  if (typeof Store !== 'undefined' && Store.navigate) {
     Store.navigate(pageId, data);
   }
   
@@ -867,7 +867,17 @@ function addEvent() {
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  DB.load();
+  // Inicializar componentes en orden correcto
+  if (typeof DATABASE !== 'undefined') {
+    console.log('DATABASE cargado');
+  }
+  
+  // Asegurar que Store esté disponible
+  if (typeof Store !== 'undefined') {
+    console.log('Store inicializado');
+  }
+  
+  // Renderizar páginas iniciales
   renderHome();
   renderEvents();
   renderArtists();

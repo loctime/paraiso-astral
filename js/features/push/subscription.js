@@ -182,7 +182,7 @@ class PushSubscription {
   // ===== GESTIÓN DE SUSCRIPCIÓN =====
   async saveSubscription(subscription) {
     try {
-      if (typeof Storage !== 'undefined') {
+      if (typeof Storage !== 'undefined' && Storage.setCache) {
         await Storage.setCache('push_subscription', subscription);
       }
       
@@ -196,7 +196,7 @@ class PushSubscription {
   async loadSubscription() {
     try {
       // Intentar cargar desde Storage primero
-      if (typeof Storage !== 'undefined') {
+      if (typeof Storage !== 'undefined' && Storage.getCache) {
         const subscription = await Storage.getCache('push_subscription');
         if (subscription) {
           this.subscription = subscription;
@@ -229,7 +229,7 @@ class PushSubscription {
       this.subscription = null;
 
       // Limpiar almacenamiento
-      if (typeof Storage !== 'undefined') {
+      if (typeof Storage !== 'undefined' && Storage.deleteCache) {
         await Storage.deleteCache('push_subscription');
       }
       localStorage.removeItem('push_subscription');

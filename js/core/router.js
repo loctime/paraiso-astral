@@ -59,18 +59,18 @@ class Router {
 
   // ===== MANEJO DE HISTORIAL =====
   setupHistoryHandling() {
-    // Manejar cambios en el historial del navegador
-    window.addEventListener('popstate', (e) => {
-      if (e.state && e.state.route) {
-        this.navigate(e.state.route, false);
-      }
-    });
-
-    // Manejar carga inicial
-    window.addEventListener('DOMContentLoaded', () => {
-      const path = window.location.pathname;
-      this.navigate(path, false);
-    });
+    if (typeof window !== 'undefined') {
+      window.addEventListener('DOMContentLoaded', () => {
+        // Pequeño retraso para asegurar que todos los módulos estén cargados
+        setTimeout(() => {
+          // Inicializar router
+          if (typeof window !== 'undefined') {
+            window.Router = router;
+            router.init();
+          }
+        }, 100);
+      });
+    }
   }
 
   // ===== REGISTRO DE RUTAS =====
