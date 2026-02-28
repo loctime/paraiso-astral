@@ -2,6 +2,7 @@ import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { env } from './config/env';
 import { authRoutes } from './modules/auth/auth.routes';
+import { eventAccessRoutes } from './modules/events/eventAccess.routes';
 import { requireAuth } from './middlewares/requireAuth';
 import { resolveOrganization } from './middlewares/resolveOrganization';
 import { requireRole } from './middlewares/requireRole';
@@ -95,6 +96,9 @@ export const createApp = (): Application => {
 
   // Auth routes
   app.use('/api/auth', authRoutes);
+
+  // Public event access routes
+  app.use('/public/event-access', eventAccessRoutes);
 
   // Ejemplo protegido con RBAC
   app.get(
