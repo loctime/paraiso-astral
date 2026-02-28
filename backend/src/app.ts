@@ -1,5 +1,7 @@
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { env } from './config/env';
 import { eventAccessRoutes } from './modules/events/eventAccess.routes';
 import { eventsRoutes } from './modules/events/events.routes';
@@ -14,6 +16,21 @@ interface AppError extends Error {
   statusCode?: number;
   isOperational?: boolean;
 }
+
+// Rate limiting for public endpoints
+const publicRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req: Request, res: Response) => {
+    res.status(429).json({
+      status: 'error',
+      statusCode: 429,
+      message: 'Too many requests'
+    });
+  }
+});
 
 // Health check endpoint
 const healthCheck = (req: Request, res: Response) => {
@@ -46,13 +63,25 @@ const globalErrorHandler = (
     const statusCode = err.statusCode;
     const message = err.message;
 
-    console.error('HttpError:', {
-      message: err.message,
-      statusCode: err.statusCode,
-      url: req.url,
-      method: req.method,
-      timestamp: new Date().toISOString(),
-    });
+    // Production-safe logging
+    if (env.NODE_ENV === 'development') {
+      console.error('HttpError:', {
+        message: err.message,
+        statusCode: err.statusCode,
+        url: req.url,
+        method: req.method,
+        timestamp: new Date().toISOString(),
+        stack: err.stack,
+      });
+    } else {
+      // Production: only log non-sensitive info
+      console.error('HttpError:', {
+        method: req.method,
+        url: req.originalUrl,
+        statusCode: err.statusCode,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     res.status(statusCode).json({
       status: 'error',
@@ -65,15 +94,26 @@ const globalErrorHandler = (
 
   // Handle regular errors
   const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal Server Error';
+  const message = env.NODE_ENV === 'production' ? 'Internal Server Error' : (err.message || 'Internal Server Error');
 
-  console.error('Error:', {
-    message: err.message,
-    stack: err.stack,
-    url: req.url,
-    method: req.method,
-    timestamp: new Date().toISOString(),
-  });
+  // Production-safe logging
+  if (env.NODE_ENV === 'development') {
+    console.error('Error:', {
+      message: err.message,
+      stack: err.stack,
+      url: req.url,
+      method: req.method,
+      timestamp: new Date().toISOString(),
+    });
+  } else {
+    // Production: only log non-sensitive info
+    console.error('Error:', {
+      method: req.method,
+      url: req.originalUrl,
+      statusCode,
+      timestamp: new Date().toISOString(),
+    });
+  }
 
   res.status(statusCode).json({
     status: 'error',
@@ -92,13 +132,21 @@ const notFoundHandler = (req: Request, res: Response, next: NextFunction) => {
 
 // Create Express app
 export const createApp = (): Application => {
-  const app = express();
+  const app: Application = express();
+
+  // Security middleware
+  app.use(helmet({
+    contentSecurityPolicy: false, // Disabled for now to avoid breaking frontend
+    xPoweredBy: false,
+    frameguard: { action: 'deny' },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+  }));
 
   // CORS configuration
   app.use(cors({
     origin: env.CORS_ORIGIN,
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   }));
 
@@ -106,26 +154,29 @@ export const createApp = (): Application => {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  // Request logging middleware
+  // Request logging middleware (non-sensitive)
   app.use((req: Request, res: Response, next: NextFunction) => {
-    console.log(`${req.method} ${req.path} - ${new Date().toISOString()}`);
+    const start = Date.now();
+    
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      console.log(`${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms`);
+    });
+    
     next();
   });
 
-  // Health check endpoint
-  app.get('/health', healthCheck);
+  // Health check endpoint (with rate limiting)
+  app.get('/health', publicRateLimit, healthCheck);
 
-  // Version endpoint
-  app.get('/api/version', version);
-
-  // Auth routes (removed - now using Firebase)
-  // app.use('/api/auth', authRoutes);
+  // Version endpoint (with rate limiting)
+  app.get('/api/version', publicRateLimit, version);
 
   // Public event access routes
   app.use('/public/event-access', eventAccessRoutes);
 
-  // Public events API
-  app.use('/api/events', eventsRoutes);
+  // Public events API (with rate limiting)
+  app.use('/api/events', publicRateLimit, eventsRoutes);
 
   // Ejemplo protegido con RBAC
   app.get(

@@ -71,11 +71,12 @@ function validateQueryParams(query: EventsQueryParams) {
 export const getEvents = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const validatedParams = validateQueryParams(req.query as EventsQueryParams);
-    const now = new Date(); // Single instance per request
+    const now = new Date(); // ✅ Single instance per request
 
-    // Build where clause
+    // Build where clause - always filter for public and published events
     const where: any = {
       status: validatedParams.status,
+      isPublic: true, // Always filter for public events
     };
 
     // Add organization filter if provided
@@ -86,7 +87,7 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
     // Add upcoming filter (events starting from now)
     if (validatedParams.upcoming) {
       where.startAt = {
-        gte: now,
+        gte: now, // ✅ Using single now instance
       };
     }
 
