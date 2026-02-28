@@ -28,8 +28,7 @@ Event Spaces is a dual-level access system that provides **attendee** and **prem
 
 ### Event Members (Firestore)
 
-**Collection**: `eventMembers`
-**Document ID**: `{eventId}_{firebaseUid}`
+**Collection**: `events/{eventId}/members/{uid}`
 
 ```typescript
 interface EventMember {
@@ -62,12 +61,12 @@ interface EventMember {
 ### Collections Structure
 
 #### Chat Collections
-- `eventChats/{eventId}/messages` - Attendee chat messages
-- `eventChatsPremium/{eventId}/messages` - Premium chat messages
+- `events/{eventId}/chats/attendee/messages` - Attendee chat messages
+- `events/{eventId}/chats/premium/messages` - Premium chat messages
 
 #### Media Collections  
-- `eventMedia/{eventId}/items` - Attendee media files
-- `eventMediaPremium/{eventId}/items` - Premium media files
+- `events/{eventId}/media/attendee/items` - Attendee media files
+- `events/{eventId}/media/premium/items` - Premium media files
 
 ## Security Rules
 
@@ -77,17 +76,17 @@ interface EventMember {
 ```
 IF user.access.attendee = true AND user.status = 'active'
 THEN allow access to:
-  - eventChats/{eventId}/messages (read/write own)
-  - eventMedia/{eventId}/items (read)
+  - events/{eventId}/chats/attendee/messages (read/write own)
+  - events/{eventId}/media/attendee/items (read)
 ```
 
 #### 2. Premium Access Validation
 ```
 IF user.access.premium = true AND user.status = 'active'
 THEN allow access to:
-  - eventChatsPremium/{eventId}/messages (read/write)
-  - eventMediaPremium/{eventId}/items (read/write)
-  - eventMedia/{eventId}/items (read/write)
+  - events/{eventId}/chats/premium/messages (read/write)
+  - events/{eventId}/media/premium/items (read/write)
+  - events/{eventId}/media/attendee/items (read/write)
 ```
 
 #### 3. Cross-Level Access

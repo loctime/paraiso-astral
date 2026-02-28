@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isActiveMember(eventId) {
+      return exists(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)).data.status == "active";
+    }
+
+    function hasAttendeeAccess(eventId) {
+      return isActiveMember(eventId) &&
+        get(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)).data.access.attendee == true;
+    }
+
+    function hasPremiumAccess(eventId) {
+      return isActiveMember(eventId) &&
+        get(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)).data.access.premium == true;
+    }
+
+    // 🔒 MEMBERS — solo backend escribe
+    match /events/{eventId}/members/{uid} {
+      allow read: if isAuthenticated() && request.auth.uid == uid;
+      allow write: if false; // SOLO Admin SDK backend
+    }
+
+    // 💬 CHAT ASISTENTES
+    match /events/{eventId}/chats/attendee/messages/{messageId} {
+
+      allow read: if isAuthenticated() && hasAttendeeAccess(eventId);
+
+      allow create: if isAuthenticated()
+        && hasAttendeeAccess(eventId)
+        && request.resource.data.firebaseUid == request.auth.uid;
+
+      allow update, delete: if false; // solo backend o moderadores via endpoint
+    }
+
+    // 💎 CHAT PREMIUM
+    match /events/{eventId}/chats/premium/messages/{messageId} {
+
+      allow read: if isAuthenticated() && hasPremiumAccess(eventId);
+
+      allow create: if isAuthenticated()
+        && hasPremiumAccess(eventId)
+        && request.resource.data.firebaseUid == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+
+    // 🖼 MEDIA ASISTENTES
+    match /events/{eventId}/media/attendee/items/{mediaId} {
+
+      allow read: if isAuthenticated() && hasAttendeeAccess(eventId);
+
+      allow create: if isAuthenticated()
+        && hasAttendeeAccess(eventId)
+        && request.resource.data.firebaseUid == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+
+    // 🖼 MEDIA PREMIUM
+    match /events/{eventId}/media/premium/items/{mediaId} {
+
+      allow read: if isAuthenticated() && hasPremiumAccess(eventId);
+
+      allow create: if isAuthenticated()
+        && hasPremiumAccess(eventId)
+        && request.resource.data.firebaseUid == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+
+  }
+}

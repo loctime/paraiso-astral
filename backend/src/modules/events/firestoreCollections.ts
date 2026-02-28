@@ -51,28 +51,48 @@ export interface EventMediaItem {
  * Get reference to event chat messages collection
  */
 export const getEventChatRef = (eventId: string) => {
-  return firestore.collection('eventChats').doc(eventId).collection('messages');
+  return firestore
+    .collection('events')
+    .doc(eventId)
+    .collection('chats')
+    .doc('attendee')
+    .collection('messages');
 };
 
 /**
  * Get reference to event premium chat messages collection
  */
 export const getEventPremiumChatRef = (eventId: string) => {
-  return firestore.collection('eventChatsPremium').doc(eventId).collection('messages');
+  return firestore
+    .collection('events')
+    .doc(eventId)
+    .collection('chats')
+    .doc('premium')
+    .collection('messages');
 };
 
 /**
  * Get reference to event media collection
  */
 export const getEventMediaRef = (eventId: string) => {
-  return firestore.collection('eventMedia').doc(eventId).collection('items');
+  return firestore
+    .collection('events')
+    .doc(eventId)
+    .collection('media')
+    .doc('attendee')
+    .collection('items');
 };
 
 /**
  * Get reference to event premium media collection
  */
 export const getEventPremiumMediaRef = (eventId: string) => {
-  return firestore.collection('eventMediaPremium').doc(eventId).collection('items');
+  return firestore
+    .collection('events')
+    .doc(eventId)
+    .collection('media')
+    .doc('premium')
+    .collection('items');
 };
 
 /**
@@ -88,14 +108,14 @@ export const initializeEventCollections = async (eventId: string): Promise<void>
     batch.set(chatRef, {
       initialized: true,
       createdAt: new Date().toISOString(),
-      collection: 'eventChats'
+      collection: 'events/{eventId}/chats/attendee/messages'
     });
 
     const premiumChatRef = getEventPremiumChatRef(eventId).doc('init');
     batch.set(premiumChatRef, {
       initialized: true,
       createdAt: new Date().toISOString(),
-      collection: 'eventChatsPremium'
+      collection: 'events/{eventId}/chats/premium/messages'
     });
 
     // Initialize media collections
@@ -103,14 +123,14 @@ export const initializeEventCollections = async (eventId: string): Promise<void>
     batch.set(mediaRef, {
       initialized: true,
       createdAt: new Date().toISOString(),
-      collection: 'eventMedia'
+      collection: 'events/{eventId}/media/attendee/items'
     });
 
     const premiumMediaRef = getEventPremiumMediaRef(eventId).doc('init');
     batch.set(premiumMediaRef, {
       initialized: true,
       createdAt: new Date().toISOString(),
-      collection: 'eventMediaPremium'
+      collection: 'events/{eventId}/media/premium/items'
     });
 
     await batch.commit();

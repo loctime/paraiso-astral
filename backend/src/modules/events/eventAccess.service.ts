@@ -37,7 +37,11 @@ export class EventAccessService {
       }
 
       // 2. Create or update event member document in Firestore
-      const eventMemberRef = firestore.collection('eventMembers').doc(`${input.eventId}_${input.firebaseUid}`);
+      const eventMemberRef = firestore
+        .collection('events')
+        .doc(input.eventId)
+        .collection('members')
+        .doc(firebaseUid);
       
       const now = new Date().toISOString();
       const accessSource: EventAccessSource = {
@@ -101,8 +105,10 @@ export class EventAccessService {
   static async getEventMember(eventId: string, firebaseUid: string): Promise<EventMember | null> {
     try {
       const memberDoc = await firestore
-        .collection('eventMembers')
-        .doc(`${eventId}_${firebaseUid}`)
+        .collection('events')
+        .doc(eventId)
+        .collection('members')
+        .doc(firebaseUid)
         .get();
 
       return memberDoc.exists ? memberDoc.data() as EventMember : null;
