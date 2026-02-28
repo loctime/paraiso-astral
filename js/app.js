@@ -867,39 +867,51 @@ function addEvent() {
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  // Inicializar componentes en orden correcto
-  if (typeof DATABASE !== 'undefined') {
-    console.log('DATABASE cargado');
-  }
-  
-  // Asegurar que Store esté disponible
-  if (typeof Store !== 'undefined') {
-    console.log('Store inicializado');
-  }
-  
-  // Inicializar API con los datos
-  if (typeof API !== 'undefined' && typeof DATABASE !== 'undefined') {
-    API.initData(DATABASE);
-    console.log('API inicializado con DATABASE');
-  }
-  
-  // Renderizar páginas iniciales
-  renderHome();
-  renderEvents();
-  renderArtists();
-  renderAdmin();
-  renderRRPP();
-  renderNews();
-  renderNotifications();
-  renderProfile();
+  // Pequeño retraso para asegurar que todos los scripts estén cargados
+  setTimeout(() => {
+    // Inicializar componentes en orden correcto
+    if (typeof DATABASE !== 'undefined') {
+      console.log('DATABASE cargado');
+    }
+    
+    // Asegurar que Store esté disponible
+    if (typeof Store !== 'undefined') {
+      console.log('Store inicializado');
+    }
+    
+    // Inicializar API con los datos (con verificación)
+    if (typeof API !== 'undefined' && typeof DATABASE !== 'undefined') {
+      if (typeof API.initData === 'function') {
+        API.initData(DATABASE);
+        console.log('API inicializado con DATABASE');
+      } else {
+        console.error('API.initData no es una función');
+        console.log('API disponible:', API);
+      }
+    } else {
+      console.error('API o DATABASE no disponibles');
+      console.log('API:', typeof API);
+      console.log('DATABASE:', typeof DATABASE);
+    }
+    
+    // Renderizar páginas iniciales
+    renderHome();
+    renderEvents();
+    renderArtists();
+    renderAdmin();
+    renderRRPP();
+    renderNews();
+    renderNotifications();
+    renderProfile();
 
-  // Register service worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  }
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
 
-  updateNotifBadge();
-  navigate('home');
+    updateNotifBadge();
+    navigate('home');
+  }, 200);
 });
 
 // Handle nav-detail pages navigation
