@@ -7,6 +7,7 @@ import { eventAccessRoutes } from './modules/events/eventAccess.routes';
 import { eventsRoutes } from './modules/events/events.routes';
 import { invitationsRoutes } from './modules/invitations/invitations.routes';
 import { adminRoutes } from './modules/admin/admin.routes';
+import { authRoutes } from './modules/auth/auth.routes';
 import { requireAuth } from './middlewares/requireAuth';
 import { resolveOrganization } from './middlewares/resolveOrganization';
 import { requireRole } from './middlewares/requireRole';
@@ -200,6 +201,9 @@ export const createApp = (): Application => {
 
   // Admin API (protected)
   app.use('/admin', publicRateLimit, adminRoutes);
+
+  // Auth API (protected)
+  app.use('/api', publicRateLimit, authRoutes);
 
   // Ejemplo protegido con RBAC
   app.get(

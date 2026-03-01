@@ -63,6 +63,15 @@ function navigate(pageId, data) {
     if (pageId === 'rrpp-detail') { renderRRPPDetail(data); }
     if (pageId === 'tickets') { renderTicketsPage(data); }
   }
+  
+  // Render page content based on pageId
+  if (pageId === 'home') { renderHome(); }
+  if (pageId === 'events') { renderEvents(); }
+  if (pageId === 'artists') { renderArtists(); }
+  if (pageId === 'admin') { renderAdmin(); }
+  if (pageId === 'rrpp') { renderRRPP(); }
+  if (pageId === 'news') { renderNews(); }
+  if (pageId === 'notifications') { renderNotifications(); }
 }
 
 // ── ERROR HANDLING ──────────────────────────────────────────────────────────────────
@@ -157,11 +166,28 @@ function initializeApp() {
   setupFormListeners();
   
   // Check auth state after a short delay
-  setTimeout(() => {
+  setTimeout(async () => {
     if (!window.Auth.isAuthenticated()) {
       navigate('login');
     } else {
-      navigate('home');
+      // User is authenticated, check role and redirect appropriately
+      try {
+        const response = await window.ApiClient.get('/me');
+        const user = response.data;
+        
+        if (user.role === 'ADMIN') {
+          navigate('admin');
+        } else if (user.role === 'ARTIST') {
+          navigate('profile'); // TODO: create artist view
+        } else if (user.role === 'PR') {
+          navigate('rrpp'); // TODO: create PR view
+        } else {
+          navigate('home');
+        }
+      } catch (error) {
+        console.error('Error checking user role:', error);
+        navigate('home');
+      }
     }
   }, 100);
 }
@@ -897,21 +923,34 @@ function updateNotifBadge() {
 }
 
 // ── ADMIN PAGE ────────────────────────────────────────────────────────────────
-function renderAdmin() {
+async function renderAdmin() {
   const el = document.getElementById('page-admin');
   const content = el.querySelector('.page-content');
-  const s = DATABASE.adminStats;
-
-  const totalRev = DATABASE.events.reduce((sum, e) => sum + DATABASE.getEventRevenue(e.id), 0);
-  const totalSold = DATABASE.events.reduce((sum, e) => sum + DATABASE.getTotalSold(e.id), 0);
-
-  content.innerHTML = `
+  
+  // Show loading state
+  showLoading(content, 'Cargando panel administrativo...');
+  
+  try {
+    // Get current user info
+    const userResponse = await window.ApiClient.get('/me');
+    const user = userResponse.data;
+    
+    // Get events for admin stats
+    const eventsResponse = await window.ApiClient.get('/api/events');
+    const events = eventsResponse.data || [];
+    
+    // Calculate stats from real data
+    const totalEvents = events.length;
+    const publishedEvents = events.filter(e => e.status === 'PUBLISHED').length;
+    const upcomingEvents = events.filter(e => new Date(e.startAt) > new Date()).length;
+    
+    content.innerHTML = `
     <div class="admin-header-card">
       <div style="position:relative;z-index:1">
         <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.15em;opacity:0.8;margin-bottom:0.3rem">Panel Administrativo</div>
-        <h2 style="font-size:1.2rem;font-weight:900">Cosmic Admin</h2>
+        <h2 style="font-size:1.2rem;font-weight:900">👋 ${user.displayName || user.email}</h2>
         <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem">
-          <span class="badge" style="background:rgba(255,255,255,0.2);color:white">🔴 LIVE NOW</span>
+          <span class="badge" style="background:rgba(255,255,255,0.2);color:white">🔴 ADMIN</span>
           <span style="font-size:0.78rem;opacity:0.8">${new Date().toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'short'})}</span>
         </div>
       </div>
@@ -919,81 +958,81 @@ function renderAdmin() {
 
     <div class="section-header"><span class="section-title">Métricas Clave</span><span class="badge badge-live">LIVE</span></div>
     <div class="stats-grid" style="margin-bottom:1.5rem">
-      <div class="stat-card glow-card"><div class="stat-label">Ingresos Totales</div><div class="stat-value">$${(totalRev/1000).toFixed(0)}k</div><div class="stat-change stat-up">📈 +${s.revenueChange}%</div></div>
-      <div class="stat-card"><div class="stat-label">Asistencia</div><div class="stat-value">${(s.attendance).toLocaleString()}</div><div class="stat-change stat-up">📈 +${s.attendanceChange}%</div></div>
-      <div class="stat-card"><div class="stat-label">Entradas</div><div class="stat-value">${(totalSold/1000).toFixed(1)}k</div><div class="stat-change stat-up">📈 +${s.ticketsChange}%</div></div>
-      <div class="stat-card"><div class="stat-label">RRPP Activos</div><div class="stat-value">${DATABASE.rrpp.filter(r=>r.active).length}</div><div class="stat-change stat-up">👥 Total: ${DATABASE.rrpp.length}</div></div>
+      <div class="stat-card glow-card">
+        <div class="stat-label">Total Eventos</div>
+        <div class="stat-value">${totalEvents}</div>
+        <div class="stat-change stat-up">� ${publishedEvents} Publicados</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Próximos</div>
+        <div class="stat-value">${upcomingEvents}</div>
+        <div class="stat-change stat-up">� Por venir</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Rol</div>
+        <div class="stat-value">${user.role}</div>
+        <div class="stat-change stat-up">� Administrador</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Estado</div>
+        <div class="stat-value">${user.status}</div>
+        <div class="stat-change stat-up">✅ Activo</div>
+      </div>
     </div>
 
-    <div class="section-header"><span class="section-title">Ventas de Tickets</span></div>
+    <div class="section-header"><span class="section-title">Gestión de Eventos</span></div>
     <div class="glass-card" style="padding:1.2rem;margin-bottom:1.5rem">
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.2rem">
-        <div><div style="font-size:1.8rem;font-weight:900">${totalSold.toLocaleString()}</div><div style="font-size:0.78rem;color:var(--text-muted)">Últimos 7 días</div></div>
-        <div style="text-align:right"><div style="font-size:1.2rem;font-weight:700;color:var(--green)">+5.4%</div><div style="font-size:0.65rem;text-transform:uppercase;color:var(--text-muted)">vs semana ant.</div></div>
-      </div>
-      <div class="bar-chart">
-        ${s.chartLabels.map((label, i) => `
-          <div class="bar-col">
-            <div class="bar-track"><div class="bar-fill ${i===2?'bar-green':'bar-purple'}" style="height:${s.chartData[i]}%"></div></div>
-            <div class="bar-label" style="${i===2?'color:var(--green)':''}">${label}</div>
-          </div>`).join('')}
-      </div>
-    </div>
-
-    <div class="section-header"><span class="section-title">Ventas por Categoría</span></div>
-    <div class="glass-card" style="padding:1.2rem;display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
-      <svg width="120" height="120" viewBox="0 0 36 36">
-        <circle cx="18" cy="18" r="15.9" fill="transparent" stroke="rgba(209,37,244,0.1)" stroke-width="4"/>
-        <circle cx="18" cy="18" r="15.9" fill="transparent" stroke="#d125f4" stroke-dasharray="60 100" stroke-dashoffset="25" stroke-width="4"/>
-        <circle cx="18" cy="18" r="15.9" fill="transparent" stroke="#00f2ff" stroke-dasharray="25 100" stroke-dashoffset="85" stroke-width="4"/>
-        <circle cx="18" cy="18" r="15.9" fill="transparent" stroke="#ff0080" stroke-dasharray="15 100" stroke-dashoffset="110" stroke-width="4"/>
-        <text x="18" y="16" text-anchor="middle" fill="rgba(240,230,255,0.6)" font-size="3" font-family="Exo 2">Total</text>
-        <text x="18" y="22" text-anchor="middle" fill="rgba(240,230,255,0.9)" font-size="4" font-weight="700" font-family="Exo 2">${(totalSold/1000).toFixed(1)}k</text>
-      </svg>
-      <div style="display:flex;flex-direction:column;gap:0.75rem">
-        <div style="display:flex;align-items:center;gap:0.6rem"><div style="width:10px;height:10px;border-radius:50%;background:var(--primary)"></div><span style="font-size:0.85rem;font-weight:600">VIP · 60%</span></div>
-        <div style="display:flex;align-items:center;gap:0.6rem"><div style="width:10px;height:10px;border-radius:50%;background:var(--cyan)"></div><span style="font-size:0.85rem;font-weight:600">General · 25%</span></div>
-        <div style="display:flex;align-items:center;gap:0.6rem"><div style="width:10px;height:10px;border-radius:50%;background:var(--pink)"></div><span style="font-size:0.85rem;font-weight:600">Backstage · 15%</span></div>
-      </div>
-    </div>
-
-    <div class="glass-card" style="padding:1.2rem;background:linear-gradient(135deg,rgba(209,37,244,0.2),rgba(107,26,138,0.3));margin-bottom:1.5rem;position:relative;overflow:hidden">
-      <div style="position:absolute;right:-10px;bottom:-20px;font-size:5rem;opacity:0.1">✦</div>
-      <div style="position:relative;z-index:1">
-        <h4 style="font-weight:700;font-size:1rem">Proyección de Asistencia</h4>
-        <div style="font-size:0.8rem;opacity:0.7;margin:0.3rem 0">Estimado para próximos eventos</div>
-        <div style="display:flex;align-items:center;gap:1rem;margin-top:0.75rem">
-          <div style="font-family:var(--font-display);font-size:2rem;font-weight:800">${s.projection.toLocaleString()}</div>
-          <div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:75%"></div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem">
+        <div>
+          <div style="font-size:1.8rem;font-weight:900">${totalEvents}</div>
+          <div style="font-size:0.78rem;color:var(--text-muted)">Eventos totales</div>
         </div>
+        <button class="btn btn-primary" onclick="openModal('modal-add-event')">
+          ➕ Nuevo Evento
+        </button>
+      </div>
+      
+      <div style="margin-top:1rem">
+        ${events.slice(0, 3).map(event => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem 0;border-bottom:1px solid var(--border)">
+            <div>
+              <div style="font-weight:600">${event.title}</div>
+              <div style="font-size:0.78rem;color:var(--text-muted)">${new Date(event.startAt).toLocaleDateString('es-ES')} • ${event.venue}</div>
+            </div>
+            <span class="badge ${event.status === 'PUBLISHED' ? 'badge-live' : 'badge-glass'}">
+              ${event.status}
+            </span>
+          </div>
+        `).join('')}
       </div>
     </div>
 
-    <div class="section-header"><span class="section-title">Top RRPP</span><a class="section-link" onclick="navigate('rrpp')">Ver todos</a></div>
-    ${DATABASE.rrpp.sort((a,b) => b.revenue - a.revenue).slice(0,3).map(r => `
-      <div class="rrpp-card" onclick="navigate('rrpp-detail',${r.id})">
-        <div class="rrpp-avatar">${r.name[0]}</div>
-        <div class="rrpp-info"><div class="rrpp-name">${r.name}</div><div class="rrpp-stats">🎫 ${r.sold} vendidas · ${r.active ? '✅ Activo':'❌ Inactivo'}</div></div>
-        <div class="rrpp-revenue"><div class="rrpp-amount">$${(r.revenue/1000).toFixed(1)}k</div><div class="rrpp-comm">Com: $${r.earned.toFixed(0)}</div></div>
-      </div>`).join('')}
-
-    <div style="margin-top:1rem;display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
-      <button class="btn btn-primary" onclick="exportData()" style="padding:0.85rem">📊 Exportar Datos</button>
-      <button class="btn btn-outline" onclick="navigate('rrpp')" style="padding:0.85rem">👥 Gestionar RRPP</button>
+    <div class="section-header"><span class="section-title">Acciones Rápidas</span></div>
+    <div class="glass-card" style="padding:1.2rem">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+        <button class="btn btn-primary" onclick="navigate('events')">
+          📅 Ver Eventos
+        </button>
+        <button class="btn btn-outline" onclick="navigate('rrpp')">
+          👥 Gestión RRPP
+        </button>
+        <button class="btn btn-outline" onclick="testRBAC()">
+          🔐 Test RBAC
+        </button>
+        <button class="btn btn-outline" onclick="handleLogout()">
+          🚪 Cerrar Sesión
+        </button>
+      </div>
     </div>
   `;
+    
+  } catch (error) {
+    console.error('Error loading admin panel:', error);
+    showErrorState(content, 'Error al cargar panel administrativo', 'renderAdmin');
+  }
 }
 
-function exportData() {
-  const data = { events: DATABASE.events, rrpp: DATABASE.rrpp, stats: DATABASE.adminStats, exportDate: new Date().toISOString() };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'paraiso-astral-export.json'; a.click();
-  URL.revokeObjectURL(url);
-  toast('📊 Datos exportados exitosamente!');
-}
-
-// ── RRPP PAGE ─────────────────────────────────────────────────────────────────
+// ── RRPP PAGE ────────────────────────────────────────────────────────────────
 function renderRRPP() {
   const el = document.getElementById('page-rrpp');
   const content = el.querySelector('.page-content');
@@ -1282,22 +1321,65 @@ async function handleLogin(event) {
   errorDiv.style.display = 'none';
   
   try {
+    // 1️⃣ Login con Firebase
     const result = await window.Auth.login(email, password);
     
-    if (result.success) {
-      toast('🚀 ¡Bienvenido a Paraíso Astral!');
+    if (!result.success) {
+      errorDiv.textContent = result.error;
+      errorDiv.style.display = 'block';
+      return;
+    }
+    
+    // 2️⃣ Obtener ID token de Firebase
+    const token = await window.Auth.getIdToken();
+    if (!token) {
+      errorDiv.textContent = 'Error al obtener token de autenticación';
+      errorDiv.style.display = 'block';
+      return;
+    }
+    
+    // 3️⃣ Guardar token en memoria (el Auth module ya lo maneja)
+    
+    // 4️⃣ Hacer request al backend para validar y obtener datos del usuario
+    const response = await window.ApiClient.get('/me');
+    
+    if (response.status === 'success') {
+      const userData = response.data;
+      
+      // 5️⃣ Renderizar según rol
+      toast(`🚀 ¡Bienvenido ${userData.displayName || userData.email}!`);
       
       // Handle return URL if exists
       const returnTo = sessionStorage.getItem('returnTo');
       sessionStorage.removeItem('returnTo');
       
-      navigate(returnTo || 'home');
+      // Navigate según rol
+      if (userData.role === 'ADMIN') {
+        navigate(returnTo || 'admin');
+      } else if (userData.role === 'ARTIST') {
+        navigate(returnTo || 'profile'); // TODO: crear vista artista
+      } else if (userData.role === 'PR') {
+        navigate(returnTo || 'rrpp'); // TODO: crear vista PR
+      } else {
+        navigate(returnTo || 'home');
+      }
     } else {
-      errorDiv.textContent = result.error;
+      errorDiv.textContent = 'Error al validar usuario con el servidor';
       errorDiv.style.display = 'block';
     }
+    
   } catch (error) {
-    errorDiv.textContent = 'Error de conexión. Intenta nuevamente.';
+    console.error('Login error:', error);
+    
+    if (error.message === 'Authentication required') {
+      errorDiv.textContent = 'Error de autenticación. Por favor intenta nuevamente.';
+    } else if (error.message === 'Access denied') {
+      errorDiv.textContent = 'No tienes permisos para acceder al sistema.';
+    } else if (error.message === 'User not found in database') {
+      errorDiv.textContent = 'Usuario no encontrado en el sistema. Contacta al administrador.';
+    } else {
+      errorDiv.textContent = 'Error de conexión. Intenta nuevamente.';
+    }
     errorDiv.style.display = 'block';
   } finally {
     // Hide loading state
