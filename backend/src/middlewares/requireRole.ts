@@ -1,10 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { MembershipRole } from '@prisma/client';
+import { MembershipRole, UserRole } from '@prisma/client';
 
-export const requireRole = (allowedRoles: MembershipRole[]) => {
+export const requireRole = (allowedRoles: MembershipRole[] | UserRole[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     try {
-      // Requerir que resolveOrganization haya corrido antes
       if (!req.user) {
         res.status(401).json({
           error: 'Authentication required',
@@ -12,19 +11,28 @@ export const requireRole = (allowedRoles: MembershipRole[]) => {
         return;
       }
 
-      if (!req.membership) {
-        res.status(403).json({
-          error: 'Organization membership required. Use resolveOrganization middleware first.',
-        });
-        return;
+      // Para roles de organización (requiere resolveOrganization middleware)
+      if (req.membership) {
+        const hasRequiredRole = allowedRoles.some(role => role === req.membership!.role);
+        if (!hasRequiredRole) {
+          res.status(403).json({
+            error: `Access denied. Required roles: ${allowedRoles.join(', ')}. Current role: ${req.membership!.role}`,
+          });
+          return;
+        }
       }
-
-      // Verificar que membership.role coincida
-      const hasRequiredRole = allowedRoles.includes(req.membership.role);
-
-      if (!hasRequiredRole) {
+      // Para roles de usuario global
+      else if ((req.user as any).role) {
+        const hasRequiredRole = allowedRoles.some(role => role === (req.user as any).role);
+        if (!hasRequiredRole) {
+          res.status(403).json({
+            error: `Access denied. Required roles: ${allowedRoles.join(', ')}. Current role: ${(req.user as any).role}`,
+          });
+          return;
+        }
+      } else {
         res.status(403).json({
-          error: `Access denied. Required roles: ${allowedRoles.join(', ')}. Current role: ${req.membership.role}`,
+          error: 'Role information not found',
         });
         return;
       }

@@ -41,6 +41,26 @@ enum TicketStatus {
   REFUNDED
 }
 
+enum UserRole {
+  ADMIN
+  ARTIST
+  PR
+  MEMBER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum InvitationStatus {
+  PENDING
+  USED
+  EXPIRED
+  REVOKED
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
@@ -61,14 +81,19 @@ model Organization {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String
-  passwordHash String
-  firebaseUid  String?  @unique
-  status       String   @default("active")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(cuid())
+  firebaseUid   String   @unique
+  email         String   @unique
+  displayName   String?
+  avatarUrl     String?
+  name          String?  // Mantener para compatibilidad con datos existentes
+  passwordHash  String?  // Mantener para compatibilidad con datos existentes
+
+  role          UserRole @default(MEMBER)
+  status        UserStatus @default(ACTIVE)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   memberships Membership[]
   scans       TicketScan[] @relation("ScannerUserScans")
@@ -236,4 +261,17 @@ model TicketScan {
   @@index([organizationId, createdAt])
   @@index([ticketId, createdAt])
   @@index([eventId, createdAt])
+}
+
+model Invitation {
+  id          String   @id @default(cuid())
+  email       String
+  role        UserRole
+  token       String   @unique
+
+  status      InvitationStatus @default(PENDING)
+  expiresAt   DateTime
+  usedAt      DateTime?
+
+  createdAt   DateTime @default(now())
 }

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { auth } from '../config/firebase';
 import { prisma } from '../config/prisma';
+import { UserStatus } from '@prisma/client';
 
 export const requireAuth = async (
   req: Request,
@@ -77,7 +78,7 @@ export const requireAuth = async (
       return;
     }
 
-    if (user.status !== 'active') {
+    if (user.status !== UserStatus.ACTIVE) {
       res.status(401).json({
         error: 'User account is not active',
       });

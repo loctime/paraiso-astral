@@ -5,6 +5,8 @@ import rateLimit from 'express-rate-limit';
 import { env } from './config/env';
 import { eventAccessRoutes } from './modules/events/eventAccess.routes';
 import { eventsRoutes } from './modules/events/events.routes';
+import { invitationsRoutes } from './modules/invitations/invitations.routes';
+import { adminRoutes } from './modules/admin/admin.routes';
 import { requireAuth } from './middlewares/requireAuth';
 import { resolveOrganization } from './middlewares/resolveOrganization';
 import { requireRole } from './middlewares/requireRole';
@@ -192,6 +194,12 @@ export const createApp = (): Application => {
 
   // Public events API (with rate limiting)
   app.use('/api/events', publicRateLimit, eventsRoutes);
+
+  // Invitations API (public validate, protected accept)
+  app.use('/invitation', publicRateLimit, invitationsRoutes);
+
+  // Admin API (protected)
+  app.use('/admin', publicRateLimit, adminRoutes);
 
   // Ejemplo protegido con RBAC
   app.get(
