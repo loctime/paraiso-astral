@@ -129,7 +129,7 @@ async function request(path, options = {}) {
 
     // Handle other HTTP errors
     if (!response.ok) {
-      const errorMessage = data.error || `HTTP ${response.status}`;
+      const errorMessage = data.message || data.error || `HTTP ${response.status}`;
       showError(errorMessage, 'error');
       throw new Error(errorMessage);
     }

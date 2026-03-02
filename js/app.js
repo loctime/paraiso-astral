@@ -1,5 +1,9 @@
 // ===== PARAÍSO ASTRAL - APP.JS =====
 
+// Estado global del usuario (respuesta de GET /api/me). No localStorage.
+var AppState = { currentUser: null };
+var pendingReturnTo = null;
+
 // ── ROUTE GUARD ──────────────────────────────────────────────────────────────────
 /**
  * Check if current route requires authentication
@@ -35,14 +39,12 @@ function canAccessRoute(pageId) {
  * @param {any} data - Optional data for page
  */
 function navigate(pageId, data) {
-  // Check route protection
+  // Check route protection: si no puede acceder, guardar destino y mostrar login
   if (!canAccessRoute(pageId)) {
-    // Redirect to login with return URL
-    window.location.hash = `#login?return=${encodeURIComponent(pageId)}`;
-    return;
+    pendingReturnTo = pageId;
+    pageId = 'login';
   }
-  
-  // Original navigation logic
+
   // Update UI
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const page = document.getElementById('page-' + pageId);
@@ -166,28 +168,34 @@ function initializeApp() {
   setupFormListeners();
   
   // Check auth state after a short delay
-  setTimeout(async () => {
+  setTimeout(async function () {
     if (!window.Auth.isAuthenticated()) {
       navigate('login');
-    } else {
-      // User is authenticated, check role and redirect appropriately
-      try {
-        const response = await window.ApiClient.get('/me');
-        const user = response.data;
-        
-        if (user.role === 'ADMIN') {
-          navigate('admin');
-        } else if (user.role === 'ARTIST') {
-          navigate('profile'); // TODO: create artist view
-        } else if (user.role === 'PR') {
-          navigate('rrpp'); // TODO: create PR view
-        } else {
-          navigate('home');
-        }
-      } catch (error) {
-        console.error('Error checking user role:', error);
+      return;
+    }
+    try {
+      var response = await window.ApiClient.get('/api/me');
+      if (response.status !== 'success' || !response.data) {
+        await window.Auth.logout();
+        AppState.currentUser = null;
+        navigate('login');
+        return;
+      }
+      AppState.currentUser = response.data;
+      var user = response.data;
+      if (user.role === 'ADMIN') {
+        navigate('admin');
+      } else if (user.role === 'ARTIST') {
+        navigate('profile');
+      } else if (user.role === 'PR') {
+        navigate('rrpp');
+      } else {
         navigate('home');
       }
+    } catch (err) {
+      await window.Auth.logout();
+      AppState.currentUser = null;
+      navigate('login');
     }
   }, 100);
 }
@@ -203,13 +211,12 @@ function handleInitialRoute() {
   const queryParams = params.length > 0 ? params.join('?') : '';
   
   if (page) {
-    // Handle return URL from login redirect
+    // Handle return URL from login redirect (en memoria)
     if (page === 'login' && queryParams) {
       const urlParams = new URLSearchParams(queryParams);
       const returnTo = urlParams.get('return');
       if (returnTo) {
-        // Store return URL for after login
-        sessionStorage.setItem('returnTo', returnTo);
+        pendingReturnTo = returnTo;
         return;
       }
     }
@@ -255,8 +262,8 @@ async function renderHome() {
   showLoading(content, 'Cargando eventos...');
   
   try {
-    // Fetch events from backend
-    const response = await window.ApiClient.get('/api/events');
+    // Fetch events from backend (público, sin login)
+    const response = await window.ApiClient.get('/api/events', { skipAuth: true });
     const events = response.data || [];
     
     if (!events || events.length === 0) {
@@ -381,8 +388,8 @@ async function renderEvents(filter = 'upcoming') {
   `;
   
   try {
-    // Fetch events from backend
-    const response = await window.ApiClient.get('/api/events');
+    // Fetch events from backend (público, sin login)
+    const response = await window.ApiClient.get('/api/events', { skipAuth: true });
     const events = response.data || [];
     
     if (!events || events.length === 0) {
@@ -532,8 +539,8 @@ async function renderEventDetail(eventId) {
   `;
   
   try {
-    // Fetch event from backend
-    const response = await window.ApiClient.get('/api/events');
+    // Fetch event from backend (público)
+    const response = await window.ApiClient.get('/api/events', { skipAuth: true });
     const events = response.data || [];
     const e = events.find(event => event.id === eventId);
     
@@ -931,12 +938,16 @@ async function renderAdmin() {
   showLoading(content, 'Cargando panel administrativo...');
   
   try {
-    // Get current user info
-    const userResponse = await window.ApiClient.get('/me');
-    const user = userResponse.data;
-    
-    // Get events for admin stats
-    const eventsResponse = await window.ApiClient.get('/api/events');
+    // Usar usuario de estado global o refrescar desde /api/me
+    var user = AppState.currentUser;
+    if (!user) {
+      var userResponse = await window.ApiClient.get('/api/me');
+      user = userResponse.data;
+      AppState.currentUser = user;
+    }
+
+    // Get events for admin stats (público)
+    const eventsResponse = await window.ApiClient.get('/api/events', { skipAuth: true });
     const events = eventsResponse.data || [];
     
     // Calculate stats from real data
@@ -1305,84 +1316,84 @@ function showRegister() {
 
 /**
  * Handle login form submission
+ * signInWithEmailAndPassword → getIdToken() → GET /api/me con Authorization Bearer → guardar usuario en AppState
  */
 async function handleLogin(event) {
   event.preventDefault();
-  
-  const email = document.getElementById('login-email').value;
-  const password = document.getElementById('login-password').value;
-  const errorDiv = document.getElementById('login-error');
-  const btnText = document.getElementById('login-btn-text');
-  const loading = document.getElementById('login-loading');
-  
-  // Show loading state
+
+  var email = document.getElementById('login-email').value;
+  var password = document.getElementById('login-password').value;
+  var errorDiv = document.getElementById('login-error');
+  var btnText = document.getElementById('login-btn-text');
+  var loading = document.getElementById('login-loading');
+
   btnText.style.display = 'none';
   loading.style.display = 'inline';
   errorDiv.style.display = 'none';
-  
+
   try {
-    // 1️⃣ Login con Firebase
-    const result = await window.Auth.login(email, password);
-    
+    // 1) Login con Firebase (email + password)
+    var result = await window.Auth.login(email, password);
     if (!result.success) {
       errorDiv.textContent = result.error;
       errorDiv.style.display = 'block';
       return;
     }
-    
-    // 2️⃣ Obtener ID token de Firebase
-    const token = await window.Auth.getIdToken();
+
+    // 2) Obtener token con user.getIdToken()
+    var token = await window.Auth.getIdToken();
     if (!token) {
       errorDiv.textContent = 'Error al obtener token de autenticación';
       errorDiv.style.display = 'block';
       return;
     }
-    
-    // 3️⃣ Guardar token en memoria (el Auth module ya lo maneja)
-    
-    // 4️⃣ Hacer request al backend para validar y obtener datos del usuario
-    const response = await window.ApiClient.get('/me');
-    
-    if (response.status === 'success') {
-      const userData = response.data;
-      
-      // 5️⃣ Renderizar según rol
-      toast(`🚀 ¡Bienvenido ${userData.displayName || userData.email}!`);
-      
-      // Handle return URL if exists
-      const returnTo = sessionStorage.getItem('returnTo');
-      sessionStorage.removeItem('returnTo');
-      
-      // Navigate según rol
-      if (userData.role === 'ADMIN') {
-        navigate(returnTo || 'admin');
-      } else if (userData.role === 'ARTIST') {
-        navigate(returnTo || 'profile'); // TODO: crear vista artista
-      } else if (userData.role === 'PR') {
-        navigate(returnTo || 'rrpp'); // TODO: crear vista PR
-      } else {
-        navigate(returnTo || 'home');
-      }
-    } else {
+
+    // 3) GET /api/me con header Authorization: Bearer <token>
+    var response = await window.ApiClient.get('/api/me');
+
+    // 4) Si response no es 200 / success → mostrar error y no permitir acceso
+    if (response.status !== 'success' || !response.data) {
+      await window.Auth.logout();
+      AppState.currentUser = null;
       errorDiv.textContent = 'Error al validar usuario con el servidor';
       errorDiv.style.display = 'block';
+      return;
     }
-    
+
+    // 5) Guardar en estado global (id, email, role, status, displayName, avatarUrl)
+    AppState.currentUser = response.data;
+    var userData = response.data;
+
+    toast('¡Bienvenido ' + (userData.displayName || userData.email) + '!');
+
+    var returnTo = pendingReturnTo;
+    pendingReturnTo = null;
+
+    // 6) Render según rol
+    if (userData.role === 'ADMIN') {
+      navigate(returnTo || 'admin');
+    } else if (userData.role === 'ARTIST') {
+      navigate(returnTo || 'profile');
+    } else if (userData.role === 'PR') {
+      navigate(returnTo || 'rrpp');
+    } else {
+      navigate(returnTo || 'home');
+    }
   } catch (error) {
-    console.error('Login error:', error);
-    
+    await window.Auth.logout();
+    AppState.currentUser = null;
+
     if (error.message === 'Authentication required') {
       errorDiv.textContent = 'Error de autenticación. Por favor intenta nuevamente.';
     } else if (error.message === 'Access denied') {
       errorDiv.textContent = 'No tienes permisos para acceder al sistema.';
-    } else if (error.message === 'User not found in database') {
+    } else if (error.message && error.message.indexOf('User not found') !== -1) {
       errorDiv.textContent = 'Usuario no encontrado en el sistema. Contacta al administrador.';
     } else {
-      errorDiv.textContent = 'Error de conexión. Intenta nuevamente.';
+      errorDiv.textContent = error.message || 'Error de conexión. Intenta nuevamente.';
     }
     errorDiv.style.display = 'block';
   } finally {
-    // Hide loading state
     btnText.style.display = 'inline';
     loading.style.display = 'none';
   }
@@ -1439,6 +1450,7 @@ async function handleRegister(event) {
 async function handleLogout() {
   try {
     await window.Auth.logout();
+    AppState.currentUser = null;
     toast('👋 Sesión cerrada');
     navigate('login');
   } catch (error) {

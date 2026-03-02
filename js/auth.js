@@ -1,11 +1,10 @@
 // ===== AUTH.JS - FIREBASE AUTHENTICATION =====
+// Uses auth exported from firebase.js (must be loaded after config + firebase.js)
 
-// Use configuration from config.js
-const firebaseConfig = window.CONFIG.FIREBASE_CONFIG;
-
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
+var auth = window.firebaseAuth;
+if (!auth) {
+  throw new Error('firebase.js must be loaded before auth.js');
+}
 
 // Auth state management
 let currentUser = null;
