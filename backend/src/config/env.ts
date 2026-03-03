@@ -6,7 +6,7 @@ interface Env {
   PORT: number;
   NODE_ENV: string;
   DATABASE_URL: string;
-  CORS_ORIGIN: string;
+  CORS_ORIGIN: string | string[];
   SMTP_HOST?: string;
   SMTP_PORT?: number;
   SMTP_USER?: string;
@@ -86,19 +86,18 @@ const validateSmtpConfig = (host?: string, port?: string, user?: string, pass?: 
   };
 };
 
-// Validar CORS_ORIGIN (preparado para múltiples dominios en el futuro)
-const validateCorsOrigin = (origin: string | undefined, nodeEnv: string): string => {
+// CORS: soporta uno o varios orígenes separados por coma
+const validateCorsOrigin = (origin: string | undefined, nodeEnv: string): string | string[] => {
   const defaultOrigin = 'http://localhost:3000';
-  const corsOrigin = origin?.trim() || defaultOrigin;
-  
-  if (nodeEnv === 'production' && corsOrigin === defaultOrigin) {
-    console.warn('⚠️ CORS_ORIGIN is set to localhost in production');
+  const raw = origin?.trim() || defaultOrigin;
+  const origins = raw.split(',').map((o) => o.trim()).filter(Boolean);
+  const value = origins.length === 1 ? origins[0]! : origins;
+
+  if (nodeEnv === 'production' && raw === defaultOrigin) {
+    console.warn('⚠️ CORS_ORIGIN is set to localhost in production. Set CORS_ORIGIN=https://astral.controldoc.app in Render.');
   }
-  
-  // TODO: En el futuro soportar lista separada por coma para múltiples dominios
-  // Ej: "https://domain1.com,https://domain2.com,https://*.vercel.app"
-  
-  return corsOrigin;
+
+  return value;
 };
 
 // Función principal que encapsula toda la lógica de carga y validación

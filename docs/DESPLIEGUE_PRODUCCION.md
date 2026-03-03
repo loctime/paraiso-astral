@@ -40,18 +40,17 @@ Si tu hosting puede ejecutar un poco de código al servir (o tienes un build que
 - Que el servidor o el build inyecte un `<script>window.__ENV__ = { ... };</script>` **antes** de `config.js`, con las mismas claves (solo las públicas: `VITE_*` y `VITE_API_BASE_URL`).
 - Así no necesitas el archivo `env.public.js` en producción.
 
-## Backend en Render (Firebase)
+## Backend en Render
 
-El backend **no** sube el archivo `astral.serviceAccount.json` (está en `.gitignore`). En Render debes definir:
+Variables **obligatorias** en el servicio backend:
 
-- **`FIREBASE_PRIVATE_KEY`** (o `FIREBASE_SERVICE_ACCOUNT_JSON`): el **contenido completo** del JSON del service account (una sola línea o pegado tal cual).
+1. **`FIREBASE_PRIVATE_KEY`** (o `FIREBASE_SERVICE_ACCOUNT_JSON`): contenido completo del JSON del service account. Sin esto el backend no arranca.
 
-Pasos en Render:
-1. Dashboard → tu servicio backend → Environment.
-2. Añadir variable `FIREBASE_PRIVATE_KEY`.
-3. Valor: copiar todo el contenido de `backend/astral.serviceAccount.json` (desde `{` hasta `}`). Puedes pegarlo en una línea o con saltos; el código hace `JSON.parse`.
+2. **`CORS_ORIGIN`**: origen del frontend para que el navegador permita las peticiones al API. Si no la pones, en producción sigue en localhost y verás **"Network error"** en la app.
+   - Valor: **`https://astral.controldoc.app`** (o la URL donde tengas el front).
+   - Varios orígenes: **`https://astral.controldoc.app,http://localhost:3000`** (separados por coma).
 
-Sin esta variable, el backend falla al arrancar con "Service account file not found".
+Pasos en Render: Dashboard → servicio backend → Environment → añadir `CORS_ORIGIN` = `https://astral.controldoc.app`.
 
 ## API en producción
 

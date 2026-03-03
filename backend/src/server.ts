@@ -18,7 +18,7 @@ const startServer = async (): Promise<void> => {
       console.log(`📱 Environment: ${env.NODE_ENV}`);
       console.log(`🔗 Health check: http://localhost:${env.PORT}/health`);
       console.log(`🔗 Version: http://localhost:${env.PORT}/api/version`);
-      console.log(`🌐 CORS origin: ${env.CORS_ORIGIN}`);
+      console.log(`🌐 CORS origin: ${Array.isArray(env.CORS_ORIGIN) ? env.CORS_ORIGIN.join(', ') : env.CORS_ORIGIN}`);
     });
 
     // Graceful shutdown mejorado
