@@ -4,15 +4,16 @@
   "description": "Backend para Paraíso Astral Event Management",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "build": "tsc",
-    "start": "node dist/server.js",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio",
-    "seed": "tsx prisma/seed.ts",
-    "seed:reset": "npx prisma migrate reset --force && npm run seed"
-  },
+  "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+  "build": "tsc",
+  "start": "node dist/server.js",
+  "prisma:generate": "prisma generate",
+  "prisma:migrate": "prisma migrate dev",
+  "prisma:deploy": "prisma migrate deploy",
+  "prisma:studio": "prisma studio",
+  "seed": "tsx prisma/seed.ts",
+  "seed:reset": "npx prisma migrate reset --force && npm run seed"
+},
   "keywords": [
     "express",
     "typescript",
