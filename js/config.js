@@ -29,6 +29,10 @@
   var API_BASE_URL = ENV.VITE_API_BASE_URL;
   if (!API_BASE_URL && isDevelopment) API_BASE_URL = 'http://localhost:4000';
   if (!API_BASE_URL) API_BASE_URL = 'https://api.paraiso-astral.com';
+  // En producción sin env (o con URL por defecto inexistente), usar API en Render
+  if (!isDevelopment && (!API_BASE_URL || API_BASE_URL === 'https://api.paraiso-astral.com')) {
+    API_BASE_URL = 'https://paraiso-astral-api.onrender.com';
+  }
 
   var CONFIG = {
     API_BASE_URL: API_BASE_URL,

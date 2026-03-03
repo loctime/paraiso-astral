@@ -2,34 +2,34 @@
 
 ## Por qué falla si solo subes el repo
 
-- **`js/env.public.js`** está en `.gitignore` (tiene claves). En producción ese archivo **no existe** → 404.
-- Sin él, `window.__ENV__` queda vacío: no hay API key de Firebase ni URL del API.
-- La app ya **no se rompe**: si falta la config, Firebase no se inicializa y se trata como “no logueado”; el resto de la app sigue cargando.
+- **`js/env.public.js`** no está en el repo (generado localmente o en el build). En producción ese archivo **no existe** → 404.
+- Sin él, `window.__ENV__` queda vacío: no hay API key de Firebase. La **URL del API** en producción tiene fallback a `https://paraiso-astral-api.onrender.com` si no está definida.
+- La app no se rompe: si falta la config, Firebase no se inicializa (no hay login) pero las llamadas al API sí funcionan si el backend está en Render.
 
-## Cómo tener login y API en producción
+## Cómo tener login y API en producción (ej. astral.controldoc.app)
 
-Tienes que hacer que en producción exista **configuración pública** (Firebase + URL del API). Dos formas habituales:
+Para que **login con Firebase** funcione, en producción tiene que existir `js/env.public.js` con las variables públicas. La forma recomendada es generarlo en el **build** desde variables de entorno.
 
-### Opción 1: Generar `env.public.js` en el build y desplegarlo
+### Opción 1: Generar `env.public.js` en el build (recomendado)
 
-En tu pipeline de despliegue (Netlify, Vercel, GitHub Actions, etc.):
+En la plataforma donde despliegas el **frontend** (Vercel, Netlify, ControlDoc, etc.):
 
-1. Definir en el panel de la plataforma las **variables de entorno** (solo las que empiezan por `VITE_`):
+1. **Variables de entorno** en el panel del proyecto:
    - `VITE_FIREBASE_API_KEY`
-   - `VITE_FIREBASE_AUTH_DOMAIN`
-   - `VITE_FIREBASE_PROJECT_ID`
-   - `VITE_FIREBASE_STORAGE_BUCKET`
+   - `VITE_FIREBASE_AUTH_DOMAIN` = `paraiso-astral.firebaseapp.com`
+   - `VITE_FIREBASE_PROJECT_ID` = `paraiso-astral`
+   - `VITE_FIREBASE_STORAGE_BUCKET` = `paraiso-astral.firebasestorage.app`
    - `VITE_FIREBASE_MESSAGING_SENDER_ID`
    - `VITE_FIREBASE_APP_ID`
-   - **`VITE_API_BASE_URL`** → URL real de tu API en producción (ej. `https://api.controldoc.app` o la que uses).
+   - **`VITE_API_BASE_URL`** = `https://paraiso-astral-api.onrender.com` (o la URL de tu API)
 
-2. En el **comando de build** (o un paso previo), generar el archivo desde esas variables:
+2. **Comando de build**: que incluya la generación del env antes de servir/subir los estáticos, por ejemplo:
    ```bash
    node scripts/generate-env.js
    ```
-   (El script lee `.env`; en CI sueles crear un `.env` desde las variables de entorno o adaptar el script para leer `process.env`.)
+   (Si usas solo “static deploy” sin build, añade un build step que ejecute ese comando; el script lee **process.env** en CI, no hace falta archivo `.env`.)
 
-3. Asegurarte de que **`js/env.public.js`** se incluye en lo que subes/sirves (no lo pongas en `.gitignore` en la carpeta de build; en el repo puede seguir ignorado).
+3. El resultado del build debe **incluir** `js/env.public.js` (no debe estar en `.gitignore` en la carpeta de despliegue).
 
 Así, en producción el front carga `env.public.js`, tiene `__ENV__` con Firebase y `VITE_API_BASE_URL`, y el login y las llamadas al API funcionan.
 
@@ -55,15 +55,12 @@ Sin esta variable, el backend falla al arrancar con "Service account file not fo
 
 ## API en producción
 
-Si tu backend está en otro dominio (por ejemplo `https://api.controldoc.app`), **tienes que** definir en producción:
-
-- **`VITE_API_BASE_URL`** = `https://tu-api-real.com`
-
-Si no, la app usa el fallback `https://api.paraiso-astral.com` y verás `ERR_NAME_NOT_RESOLVED` si ese dominio no existe.
+- Si **no** defines `VITE_API_BASE_URL` en el front, en producción la app usa por defecto **`https://paraiso-astral-api.onrender.com`** (fallback en `config.js`).
+- Si tu API está en otra URL, define **`VITE_API_BASE_URL`** en las variables de entorno del despliegue del frontend.
 
 ## Resumen
 
 | Qué quieres        | Qué hacer |
 |--------------------|-----------|
-| Que la app no se caiga en producción | Ya está: si falta `env.public.js`, no hay error fatal. |
-| Login y datos reales en producción   | Generar/inyectar config (env.public.js o `window.__ENV__`) con Firebase y `VITE_API_BASE_URL` en el despliegue. |
+| Que la app no se caiga y que el API responda en producción | Fallback a `paraiso-astral-api.onrender.com`; sin `env.public.js` el login no funciona pero el resto sí. |
+| Login (Firebase) en producción   | En el despliegue del **front**, definir variables `VITE_*` y `VITE_API_BASE_URL`, y ejecutar `node scripts/generate-env.js` en el build para generar `js/env.public.js`. |
