@@ -111,3 +111,90 @@ export const requireAuth = async (
     next(error);
   }
 };
+
+/**
+ * Auth opcional para rutas públicas: si hay Bearer token válido, resuelve y adjunta req.user.
+ * Si no hay token o es inválido, continúa sin req.user (Access Engine trata como guest).
+ * Usar en rutas event-scoped públicas (ej. GET /api/events/:eventId) para que REGISTERED/FOLLOWER/HAS_TICKET funcionen.
+ */
+export const optionalAuth = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      next();
+      return;
+    }
+
+    const idToken = authHeader.substring(7);
+    let decodedToken: { uid: string; email?: string };
+    try {
+      decodedToken = await auth.verifyIdToken(idToken);
+    } catch {
+      next();
+      return;
+    }
+
+    const firebaseUid = decodedToken.uid;
+    const email = decodedToken.email;
+    if (!email) {
+      next();
+      return;
+    }
+
+    let user = await prisma.user.findUnique({
+      where: { firebaseUid },
+      select: {
+        id: true,
+        firebaseUid: true,
+        email: true,
+        name: true,
+        displayName: true,
+        avatarUrl: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        passwordHash: true,
+      },
+    });
+
+    if (!user) {
+      user = await prisma.user.findUnique({
+        where: { email: email.toLowerCase() },
+        select: {
+          id: true,
+          firebaseUid: true,
+          email: true,
+          name: true,
+          displayName: true,
+          avatarUrl: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          passwordHash: true,
+        },
+      });
+      if (user) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { firebaseUid },
+        });
+      }
+    }
+
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      next();
+      return;
+    }
+
+    req.user = { ...user, firebaseUid };
+    next();
+  } catch {
+    next();
+  }
+};

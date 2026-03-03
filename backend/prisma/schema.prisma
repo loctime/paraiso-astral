@@ -61,6 +61,22 @@ enum InvitationStatus {
   REVOKED
 }
 
+enum EventVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum EventAccessMode {
+  REGISTERED
+  HAS_TICKET
+  FOLLOWER
+}
+
+enum FollowerScope {
+  ORGANIZATION
+  EVENT
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
@@ -71,7 +87,8 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships Membership[]
+  memberships  Membership[]
+  followers    OrganizationFollower[]
   events       Event[]
   ticketTypes  TicketType[]
   orders       Order[]
@@ -95,8 +112,12 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  memberships Membership[]
-  scans       TicketScan[] @relation("ScannerUserScans")
+  memberships   Membership[]
+  orders        Order[]                 @relation("UserOrders")
+  ticketsOwned  Ticket[]                @relation("TicketOwner")
+  orgFollows    OrganizationFollower[]
+  eventFollows EventFollower[]
+  scans         TicketScan[]            @relation("ScannerUserScans")
 }
 
 model Membership {
@@ -113,11 +134,37 @@ model Membership {
   @@index([organizationId, role])
 }
 
+model OrganizationFollower {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId, createdAt])
+}
+
+model EventFollower {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId, createdAt])
+}
+
 model Event {
-  id              String        @id @default(cuid())
+  id              String           @id @default(cuid())
   organizationId  String
   title           String
-  slug            String        @unique
+  slug            String           @unique
   description     String
   coverImage      String?
   startAt         DateTime
@@ -126,15 +173,19 @@ model Event {
   address         String?
   city            String?
   country         String?
-  status          EventStatus   @default(DRAFT)
-  isPublic        Boolean       @default(true)
-  isFeatured      Boolean       @default(false)
+  status          EventStatus      @default(DRAFT)
+  isPublic        Boolean          @default(true)
+  visibility      EventVisibility  @default(PUBLIC)
+  accessMode      EventAccessMode  @default(REGISTERED)
+  followerScope   FollowerScope    @default(ORGANIZATION)
+  isFeatured      Boolean          @default(false)
   capacityTotal   Int?
 
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
-  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  followers       EventFollower[]
   ticketTypes     TicketType[]
   orders          Order[]
   tickets         Ticket[]
@@ -142,6 +193,8 @@ model Event {
   orderItems      OrderItem[]
 
   @@index([organizationId])
+  @@index([organizationId, visibility, startAt])
+  @@index([organizationId, visibility, status])
   @@index([status])
   @@index([startAt])
 }
@@ -176,6 +229,7 @@ model Order {
   id             String      @id @default(cuid())
   organizationId String
   eventId        String
+  buyerUserId    String?     // Setear al crear orden si el comprador está logueado (para HAS_TICKET / ownership)
   buyerEmail     String
   buyerName      String?
   status         OrderStatus @default(PAID)
@@ -188,10 +242,12 @@ model Order {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   event        Event        @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  buyerUser    User?        @relation("UserOrders", fields: [buyerUserId], references: [id], onDelete: SetNull)
   items        OrderItem[]
   tickets      Ticket[]
 
   @@index([organizationId, eventId, createdAt])
+  @@index([eventId, buyerUserId])
   @@index([buyerEmail])
 }
 
@@ -217,12 +273,13 @@ model OrderItem {
 }
 
 model Ticket {
-  id             String      @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   eventId        String
   ticketTypeId   String
   orderId        String
-  serial         String      @unique
+  ownerUserId    String?      // Igual a Order.buyerUserId al crear; usado por Access Engine HAS_TICKET
+  serial         String       @unique
   status         TicketStatus @default(VALID)
 
   usedAt   DateTime?
@@ -237,11 +294,13 @@ model Ticket {
   event        Event        @relation(fields: [eventId], references: [id], onDelete: Restrict)
   ticketType   TicketType   @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
   order        Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  ownerUser    User?        @relation("TicketOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
 
   scans TicketScan[]
 
   @@index([organizationId, eventId])
   @@index([eventId, status])
+  @@index([eventId, ownerUserId, status])
 }
 
 model TicketScan {

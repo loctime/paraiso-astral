@@ -1,11 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../../config/prisma';
 import { EventPublic, EventsQueryParams, EventsResponse } from '../../types/eventPublic';
-import { EventStatus } from '@prisma/client';
+import { EventStatus, EventVisibility } from '@prisma/client';
 import { createBadRequestError } from '../../utils/errors';
-
-// Valid values for status parameter (only PUBLISHED allowed for public endpoint)
-const VALID_STATUSES = ['PUBLISHED'];
+import type { Prisma } from '@prisma/client';
 
 /**
  * Validate and sanitize query parameters for public endpoint
@@ -71,24 +69,20 @@ function validateQueryParams(query: EventsQueryParams) {
 export const getEvents = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const validatedParams = validateQueryParams(req.query as EventsQueryParams);
-    const now = new Date(); // ✅ Single instance per request
+    const now = new Date();
 
-    // Build where clause - always filter for public and published events
-    const where: any = {
+    // Listado público: solo eventos PUBLIC (Access Engine). PRIVATE no se listan aquí.
+    const where: Prisma.EventWhereInput = {
       status: validatedParams.status,
-      isPublic: true, // Always filter for public events
+      visibility: EventVisibility.PUBLIC,
     };
 
-    // Add organization filter if provided
     if (validatedParams.organizationId) {
       where.organizationId = validatedParams.organizationId;
     }
 
-    // Add upcoming filter (events starting from now)
     if (validatedParams.upcoming) {
-      where.startAt = {
-        gte: now, // ✅ Using single now instance
-      };
+      where.startAt = { gte: now };
     }
 
     // Calculate pagination
@@ -146,6 +140,44 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
 
     res.json(response);
 
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/events/:eventId
+ * Detalle de evento. Requiere requireEventAccess (404 si sin acceso).
+ * req.event está poblado por el middleware.
+ */
+export const getEventById = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const event = req.event;
+    if (!event) {
+      res.status(404).json({ error: 'Event not found' });
+      return;
+    }
+
+    const org = await prisma.organization.findUnique({
+      where: { id: event.organizationId },
+      select: { id: true, name: true },
+    });
+
+    const eventPublic: EventPublic = {
+      id: event.id,
+      title: event.title,
+      slug: event.slug,
+      description: event.description,
+      coverImage: event.coverImage,
+      startAt: event.startAt,
+      endAt: event.endAt,
+      venue: event.venue,
+      city: event.city,
+      status: event.status,
+      organization: org ? { id: org.id, name: org.name } : { id: event.organizationId, name: '' },
+    };
+
+    res.json(eventPublic);
   } catch (error) {
     next(error);
   }
