@@ -1,27 +1,27 @@
 // ===== AUTH.JS - FIREBASE AUTHENTICATION =====
 // Solo Firebase Auth (signInWithEmailAndPassword, getIdToken). NO Firestore en frontend.
-// Usa auth exportado desde firebase.js (cargar después de config + firebase.js).
+// Si firebaseAuth es null (env.public.js 404 en producción), exportamos stub para que la app no se rompa.
 
 var auth = window.firebaseAuth;
-if (!auth) {
-  throw new Error('firebase.js must be loaded before auth.js');
-}
+var currentUser = null;
+var tokenRefreshTimer = null;
 
-// Auth state management
-let currentUser = null;
-let tokenRefreshTimer = null;
-
-// Listen to auth state changes
-auth.onAuthStateChanged((user) => {
-  currentUser = user;
-  console.log('Auth state changed:', user ? `User: ${user.email}` : 'No user');
-  
-  // Clear token refresh timer when user logs out
-  if (!user && tokenRefreshTimer) {
-    clearTimeout(tokenRefreshTimer);
-    tokenRefreshTimer = null;
+if (auth) {
+  auth.onAuthStateChanged(function (user) {
+    currentUser = user;
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('Auth state changed:', user ? 'User: ' + user.email : 'No user');
+    }
+    if (!user && tokenRefreshTimer) {
+      clearTimeout(tokenRefreshTimer);
+      tokenRefreshTimer = null;
+    }
+  });
+} else {
+  if (typeof console !== 'undefined' && console.warn) {
+    console.warn('[Auth] Firebase no inicializado. Incluye js/env.public.js o configura __ENV__ en producción.');
   }
-});
+}
 
 // ===== AUTH FUNCTIONS =====
 
@@ -31,9 +31,14 @@ auth.onAuthStateChanged((user) => {
  * @param {string} password 
  * @returns {Promise<Object>} { success: boolean, user?: object, error?: string }
  */
+var AUTH_NOT_READY_MSG = 'Firebase no configurado. Añade js/env.public.js al despliegue o configura __ENV__.';
+
 async function login(email, password) {
+  if (!auth) {
+    return { success: false, error: AUTH_NOT_READY_MSG };
+  }
   try {
-    const userCredential = await auth.signInWithEmailAndPassword(email, password);
+    var userCredential = await auth.signInWithEmailAndPassword(email, password);
     const user = userCredential.user;
     
     return {
@@ -60,8 +65,11 @@ async function login(email, password) {
  * @returns {Promise<Object>} { success: boolean, user?: object, error?: string }
  */
 async function register(email, password) {
+  if (!auth) {
+    return { success: false, error: AUTH_NOT_READY_MSG };
+  }
   try {
-    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+    var userCredential = await auth.createUserWithEmailAndPassword(email, password);
     const user = userCredential.user;
     
     return {
@@ -86,13 +94,12 @@ async function register(email, password) {
  * @returns {Promise<void>}
  */
 async function logout() {
+  if (!auth) return;
   try {
-    // Clear token refresh timer
     if (tokenRefreshTimer) {
       clearTimeout(tokenRefreshTimer);
       tokenRefreshTimer = null;
     }
-    
     await auth.signOut();
   } catch (error) {
     // Silently handle logout errors
@@ -113,13 +120,9 @@ function getCurrentUser() {
  * @returns {Promise<string|null>} ID token or null
  */
 async function getIdToken() {
+  if (!auth || !currentUser) return null;
   try {
-    if (!currentUser) {
-      return null;
-    }
-    
-    // Get token without forcing refresh
-    const token = await currentUser.getIdToken();
+    var token = await currentUser.getIdToken();
     return token;
   } catch (error) {
     console.error('Error getting ID token:', error);
@@ -141,6 +144,9 @@ function isAuthenticated() {
  * @returns {Promise<Object>} { success: boolean, error?: string }
  */
 async function resetPassword(email) {
+  if (!auth) {
+    return { success: false, error: AUTH_NOT_READY_MSG };
+  }
   try {
     await auth.sendPasswordResetEmail(email);
     return {

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { validateInvitation, acceptInvitation } from './invitations.controller';
 import { requireAuth } from '../../middlewares/requireAuth';
 
-const router = Router();
+const router: Router = Router();
 
 // VALIDAR INVITACIÓN (público)
 router.get('/validate', validateInvitation);

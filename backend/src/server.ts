@@ -34,7 +34,7 @@ const startServer = async (): Promise<void> => {
       try {
         // Cerrar servidor HTTP primero
         await new Promise<void>((resolve, reject) => {
-          server.close((err) => {
+          server.close((err: Error | undefined) => {
             if (err) {
               reject(err);
             } else {

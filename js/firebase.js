@@ -1,21 +1,27 @@
 // ===== FIREBASE CONFIG - PARAÍSO ASTRAL =====
 // Solo Firebase Auth. NO Firestore en frontend.
-// initializeApp + getAuth (compat: firebase.auth()). Requiere CONFIG cargado antes.
+// Si env.public.js no está (404 en producción), no lanzamos: auth queda null y Auth será stub.
 
 (function () {
   'use strict';
 
+  window.firebaseAuth = null;
+
   if (typeof window.CONFIG === 'undefined' || !window.CONFIG.FIREBASE_CONFIG) {
-    throw new Error('CONFIG.FIREBASE_CONFIG must be defined before loading firebase.js');
+    return;
   }
 
   var firebaseConfig = window.CONFIG.FIREBASE_CONFIG;
   if (!firebaseConfig.apiKey) {
-    throw new Error('CONFIG.FIREBASE_CONFIG.apiKey is required. Run: node scripts/generate-env.js and load js/env.public.js before config.js.');
+    return;
   }
 
-  var app = firebase.initializeApp(firebaseConfig);
-  var auth = firebase.auth(app);
-
-  window.firebaseAuth = auth;
+  try {
+    var app = firebase.initializeApp(firebaseConfig);
+    window.firebaseAuth = firebase.auth(app);
+  } catch (e) {
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn('[Firebase] init failed:', e.message);
+    }
+  }
 })();

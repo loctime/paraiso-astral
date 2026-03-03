@@ -74,12 +74,12 @@ async function request(path, options = {}) {
   }
 
   try {
-    // Get Firebase ID token
-    let token = null;
+    var token = null;
     if (!skipAuth) {
-      token = await window.Auth.getIdToken();
+      if (window.Auth && typeof window.Auth.getIdToken === 'function') {
+        token = await window.Auth.getIdToken();
+      }
       if (!token) {
-        // Redirect to login if no token available
         window.location.hash = '#login';
         throw new Error('Authentication required');
       }

@@ -38,8 +38,12 @@ export const requireAuth = async (
       where: { firebaseUid: firebaseUid },
       select: {
         id: true,
+        firebaseUid: true,
         email: true,
         name: true,
+        displayName: true,
+        avatarUrl: true,
+        role: true,
         status: true,
         createdAt: true,
         updatedAt: true,
@@ -53,8 +57,12 @@ export const requireAuth = async (
         where: { email: email.toLowerCase() },
         select: {
           id: true,
+          firebaseUid: true,
           email: true,
           name: true,
+          displayName: true,
+          avatarUrl: true,
+          role: true,
           status: true,
           createdAt: true,
           updatedAt: true,
@@ -88,7 +96,7 @@ export const requireAuth = async (
     // Adjuntar req.user con información de Firebase y base de datos
     req.user = {
       ...user,
-      firebaseUid: firebaseUid,
+      firebaseUid,
     };
     
     next();

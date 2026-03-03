@@ -25,16 +25,12 @@ function isProtectedRoute(pageId) {
  * @returns {boolean} True if user can access route
  */
 function canAccessRoute(pageId) {
-  // Public routes are always accessible
   if (window.CONFIG.PUBLIC_ROUTES.includes(pageId)) {
     return true;
   }
-  
-  // Protected routes require authentication
   if (isProtectedRoute(pageId)) {
-    return window.Auth.isAuthenticated();
+    return window.Auth && typeof window.Auth.isAuthenticated === 'function' && window.Auth.isAuthenticated();
   }
-  
   return true;
 }
 
@@ -164,16 +160,15 @@ function initializeApp() {
   // Setup form listeners
   setupFormListeners();
   
-  // Check auth state after a short delay
   setTimeout(async function () {
-    if (!window.Auth.isAuthenticated()) {
+    if (!window.Auth || typeof window.Auth.isAuthenticated !== 'function' || !window.Auth.isAuthenticated()) {
       navigate('login');
       return;
     }
     try {
       var response = await window.ApiClient.get('/api/me');
       if (response.status !== 'success' || !response.data) {
-        await window.Auth.logout();
+        if (window.Auth.logout) await window.Auth.logout();
         AppState.currentUser = null;
         navigate('login');
         return;
@@ -190,7 +185,7 @@ function initializeApp() {
         navigate('home');
       }
     } catch (err) {
-      await window.Auth.logout();
+      if (window.Auth && window.Auth.logout) await window.Auth.logout();
       AppState.currentUser = null;
       navigate('login');
     }
@@ -1387,9 +1382,8 @@ async function handleLogout() {
  * Check authentication state and redirect if needed
  */
 function checkAuthState() {
-  const user = window.Auth.getCurrentUser();
+  var user = window.Auth && typeof window.Auth.getCurrentUser === 'function' ? window.Auth.getCurrentUser() : null;
   if (!user) {
-    // User not logged in, show login
     navigate('login');
   }
 }
