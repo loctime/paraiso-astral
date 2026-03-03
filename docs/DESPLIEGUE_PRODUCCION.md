@@ -40,6 +40,19 @@ Si tu hosting puede ejecutar un poco de código al servir (o tienes un build que
 - Que el servidor o el build inyecte un `<script>window.__ENV__ = { ... };</script>` **antes** de `config.js`, con las mismas claves (solo las públicas: `VITE_*` y `VITE_API_BASE_URL`).
 - Así no necesitas el archivo `env.public.js` en producción.
 
+## Backend en Render (Firebase)
+
+El backend **no** sube el archivo `astral.serviceAccount.json` (está en `.gitignore`). En Render debes definir:
+
+- **`FIREBASE_PRIVATE_KEY`** (o `FIREBASE_SERVICE_ACCOUNT_JSON`): el **contenido completo** del JSON del service account (una sola línea o pegado tal cual).
+
+Pasos en Render:
+1. Dashboard → tu servicio backend → Environment.
+2. Añadir variable `FIREBASE_PRIVATE_KEY`.
+3. Valor: copiar todo el contenido de `backend/astral.serviceAccount.json` (desde `{` hasta `}`). Puedes pegarlo en una línea o con saltos; el código hace `JSON.parse`.
+
+Sin esta variable, el backend falla al arrancar con "Service account file not found".
+
 ## API en producción
 
 Si tu backend está en otro dominio (por ejemplo `https://api.controldoc.app`), **tienes que** definir en producción:
