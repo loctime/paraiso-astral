@@ -1,5 +1,6 @@
 // ===== AUTH.JS - FIREBASE AUTHENTICATION =====
-// Uses auth exported from firebase.js (must be loaded after config + firebase.js)
+// Solo Firebase Auth (signInWithEmailAndPassword, getIdToken). NO Firestore en frontend.
+// Usa auth exportado desde firebase.js (cargar después de config + firebase.js).
 
 var auth = window.firebaseAuth;
 if (!auth) {
@@ -164,7 +165,7 @@ function getAuthErrorMessage(error) {
     return 'Error de autenticación. Intenta nuevamente.';
   }
   
-  const errorMessages = {
+  var errorMessages = {
     'auth/user-not-found': 'Usuario no encontrado',
     'auth/wrong-password': 'Contraseña incorrecta',
     'auth/invalid-email': 'Email inválido',
@@ -174,9 +175,11 @@ function getAuthErrorMessage(error) {
     'auth/operation-not-allowed': 'Operación no permitida',
     'auth/weak-password': 'Contraseña muy débil',
     'auth/network-request-failed': 'Error de conexión. Verifica tu internet',
-    'auth/requires-recent-login': 'Se requiere inicio de sesión reciente'
+    'auth/requires-recent-login': 'Se requiere inicio de sesión reciente',
+    'auth/invalid-api-key': 'Configuración de Firebase incorrecta. Ejecuta: node scripts/generate-env.js',
+    'auth/configuration-not-found': 'Configuración de Firebase no encontrada. Revisa CONFIG y env.public.js'
   };
-  
+
   return errorMessages[error.code] || error.message || 'Error de autenticación';
 }
 

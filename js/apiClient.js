@@ -24,13 +24,14 @@ function setErrorHandler(handler) {
  * @param {string} message - Error message
  * @param {string} type - Error type ('error', 'warning', 'info')
  */
-function showError(message, type = 'error') {
+function showError(message, type) {
+  type = type || 'error';
+  if (message == null || message === '') message = 'Error inesperado';
   if (globalErrorHandler) {
     globalErrorHandler(message, type);
   } else {
-    // Fallback to toast
     const toastFn = window.toast || ((msg) => console.log(msg));
-    toastFn(`❌ ${message}`);
+    toastFn('❌ ' + message);
   }
 }
 
@@ -127,6 +128,13 @@ async function request(path, options = {}) {
       throw new Error('Access denied');
     }
 
+    // Handle 404 (ej. usuario no en BD: "User not found in database")
+    if (response.status === 404) {
+      const msg = data.message || data.error || 'Recurso no encontrado';
+      showError(msg, 'error');
+      throw new Error(msg);
+    }
+
     // Handle other HTTP errors
     if (!response.ok) {
       const errorMessage = data.message || data.error || `HTTP ${response.status}`;
@@ -168,16 +176,16 @@ async function request(path, options = {}) {
 }
 
 /**
- * Handle unauthorized access
+ * Handle unauthorized access (401). Limpia estado y redirige a login.
  */
 function handleUnauthorized() {
-  // Clear auth state
-  window.Auth.logout();
-  
-  // Show error message
+  if (window.Auth && typeof window.Auth.logout === 'function') {
+    window.Auth.logout();
+  }
+  if (window.AppState) {
+    window.AppState.currentUser = null;
+  }
   showError('Sesión expirada. Por favor inicia sesión nuevamente', 'warning');
-  
-  // Redirect to login
   window.location.hash = '#login';
 }
 

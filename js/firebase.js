@@ -1,5 +1,6 @@
 // ===== FIREBASE CONFIG - PARAÍSO ASTRAL =====
-// initializeApp, getAuth, export auth. No mocks. Requires CONFIG loaded first.
+// Solo Firebase Auth. NO Firestore en frontend.
+// initializeApp + getAuth (compat: firebase.auth()). Requiere CONFIG cargado antes.
 
 (function () {
   'use strict';
@@ -9,6 +10,10 @@
   }
 
   var firebaseConfig = window.CONFIG.FIREBASE_CONFIG;
+  if (!firebaseConfig.apiKey) {
+    throw new Error('CONFIG.FIREBASE_CONFIG.apiKey is required. Run: node scripts/generate-env.js and load js/env.public.js before config.js.');
+  }
+
   var app = firebase.initializeApp(firebaseConfig);
   var auth = firebase.auth(app);
 

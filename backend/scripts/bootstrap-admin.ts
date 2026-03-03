@@ -1,6 +1,12 @@
-import { PrismaClient, UserRole, UserStatus } from '@prisma/client'
+import dotenv from 'dotenv';
+import path from 'path';
 
-const prisma = new PrismaClient()
+// Cargar .env del backend (desde backend/.env)
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+
+import { PrismaClient, UserRole, UserStatus } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 async function main() {
   const email = process.env.BOOTSTRAP_ADMIN_EMAIL

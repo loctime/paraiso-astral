@@ -1,7 +1,12 @@
 // ===== PARAÍSO ASTRAL - APP.JS =====
 
-// Estado global del usuario (respuesta de GET /api/me). No localStorage.
-var AppState = { currentUser: null };
+// Estado global: solo usuario (GET /api/me) y UI de tickets. Sin DATABASE ni Firestore.
+var AppState = {
+  currentUser: null,
+  selectedEventId: null,
+  selectedTicketType: 'general'
+};
+window.AppState = AppState;
 var pendingReturnTo = null;
 
 // ── ROUTE GUARD ──────────────────────────────────────────────────────────────────
@@ -78,40 +83,32 @@ function navigate(pageId, data) {
 
 // ── ERROR HANDLING ──────────────────────────────────────────────────────────────────
 /**
- * Global error handler
+ * App-level error handler (evita conflicto con variable globalErrorHandler en apiClient.js)
  * @param {string} message - Error message
  * @param {string} type - Error type
  */
-function globalErrorHandler(message, type = 'error') {
-  const icons = {
-    error: '❌',
-    warning: '⚠️',
-    info: 'ℹ️'
-  };
-  
-  const icon = icons[type] || icons.error;
-  toast(`${icon} ${message}`);
+function handleAppError(message, type) {
+  type = type || 'error';
+  if (message == null || message === '') message = 'Error inesperado en la aplicación';
+  var icons = { error: '❌', warning: '⚠️', info: 'ℹ️' };
+  var icon = icons[type] || icons.error;
+  toast(icon + ' ' + message);
 }
 
 /**
  * Initialize error handling
  */
 function initializeErrorHandling() {
-  // Set global error handler in ApiClient
   if (window.ApiClient && window.ApiClient.setErrorHandler) {
-    window.ApiClient.setErrorHandler(globalErrorHandler);
+    window.ApiClient.setErrorHandler(handleAppError);
   }
-  
-  // Handle unhandled promise rejections
-  window.addEventListener('unhandledrejection', (event) => {
+  window.addEventListener('unhandledrejection', function (event) {
     console.error('Unhandled promise rejection:', event.reason);
-    globalErrorHandler('Error inesperado en la aplicación', 'error');
+    handleAppError('Error inesperado en la aplicación', 'error');
   });
-  
-  // Handle global errors
-  window.addEventListener('error', (event) => {
+  window.addEventListener('error', function (event) {
     console.error('Global error:', event.error);
-    globalErrorHandler('Error inesperado en la aplicación', 'error');
+    handleAppError('Error inesperado en la aplicación', 'error');
   });
 }
 
@@ -753,70 +750,59 @@ async function renderArtistDetail(artistId) {
 }
 
 // ── TICKETS PAGE ──────────────────────────────────────────────────────────────
-function renderTicketsPage(eventId) {
-  const e = DATABASE.events.find(x => x.id === eventId) || DATABASE.events[0];
-  const el = document.getElementById('page-tickets');
-  const content = el.querySelector('.page-content');
+// Evento desde backend GET /api/events (skipAuth). Sin DATABASE.
+async function renderTicketsPage(eventId) {
+  AppState.selectedEventId = eventId;
+  var el = document.getElementById('page-tickets');
+  var content = el.querySelector('.page-content');
+  content.innerHTML = '<div style="text-align:center;padding:2rem"><div style="font-size:2rem">🔄</div><div style="margin-top:1rem;color:var(--text-muted)">Cargando...</div></div>';
 
-  content.innerHTML = `
-    <button onclick="navigate('events')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Eventos</button>
-    
-    <div style="border-radius:var(--radius-xl);overflow:hidden;border:1px solid var(--border);margin-bottom:1.5rem">
-      <div style="height:160px;background:linear-gradient(135deg,#1a0820,#3d0055);display:flex;align-items:center;justify-content:center;font-size:5rem;position:relative">
-        ${e.flyer}
-        <span class="badge badge-primary" style="position:absolute;top:0.75rem;left:0.75rem">Evento Destacado</span>
-      </div>
-      <div style="padding:1rem">
-        <h2 style="font-size:1.3rem;font-weight:900">${e.title}</h2>
-        <div style="color:var(--text-muted);font-size:0.85rem;margin-top:0.3rem">📅 ${e.month} ${e.day} · ${e.time}</div>
-        <div style="color:var(--primary);font-size:0.85rem;font-weight:600">📍 ${e.venue}</div>
-      </div>
-    </div>
-
-    <h3 style="font-family:var(--font-display);font-size:0.85rem;font-weight:700;margin-bottom:1rem">Seleccionar Tipo de Acceso</h3>
-    
-    ${[
-      { type: 'general', label: 'Acceso General', desc: 'Acceso completo al Main Stage y Chill Zone', price: e.ticketGeneral, avail: 'Disponible', remaining: e.capacity - e.soldGeneral - e.soldVIP - e.soldBackstage },
-      { type: 'vip', label: 'VIP Astral Pass ✦', desc: 'Acceso backstage, VIP lounge & Fast track', price: e.ticketVIP, avail: 'Limitado', remaining: Math.max(0, 200 - e.soldVIP) },
-      { type: 'backstage', label: 'Backstage Pass 👑', desc: 'Acceso total + meet & greet artistas', price: e.ticketBackstage, avail: 'Exclusivo', remaining: Math.max(0, 50 - e.soldBackstage) },
-    ].map(t => `
-      <div class="ticket ${DATABASE.state.selectedTicketType === t.type ? 'selected' : ''}" onclick="selectTicket('${t.type}')" style="margin-bottom:0.75rem">
-        <div class="ticket-inner">
-          <div>
-            <div style="font-weight:800;font-size:1rem">${t.label}</div>
-            <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem">${t.desc}</div>
-            <div style="font-size:0.7rem;margin-top:0.3rem;color:${t.remaining < 30 ? 'var(--pink)' : 'var(--green)'}">${t.remaining} disponibles</div>
-          </div>
-          <div style="text-align:right">
-            <div style="color:var(--primary);font-family:var(--font-display);font-size:1.1rem;font-weight:700">$${t.price}</div>
-            <div style="font-size:0.65rem;text-transform:uppercase;font-weight:700;color:var(--text-muted)">${t.avail}</div>
-          </div>
-        </div>
-      </div>`).join('')}
-
-    <div class="glass-card" style="padding:1.5rem;margin:1.5rem 0;text-align:center">
-      <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.15em;color:var(--primary);font-weight:700;margin-bottom:1rem">Pase Digital de Entrada</div>
-      <div style="background:white;border-radius:var(--radius-lg);padding:1rem;display:inline-block;position:relative">
-        ${generateQR()}
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-          <div style="width:36px;height:36px;background:var(--primary);border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid white;font-size:1rem">🚀</div>
-        </div>
-      </div>
-      <div style="margin-top:1rem">
-        <div style="font-family:var(--font-display);font-size:1rem;font-weight:700">AX-${Math.floor(Math.random()*999)+100}-PARAISO</div>
-        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.3rem">Escanear en la puerta de entrada</div>
-      </div>
-    </div>
-
-    <button class="btn btn-primary btn-full" style="font-size:1rem;padding:1rem" onclick="purchaseTicket(${e.id})">🛍️ Comprar con Seguridad</button>
-    <div style="text-align:center;margin-top:0.75rem;font-size:0.75rem;color:var(--text-muted)">🔒 Pago seguro · SSL encriptado</div>
-  `;
+  try {
+    var res = await window.ApiClient.get('/api/events', { skipAuth: true });
+    var events = res.data || [];
+    var e = events.find(function (x) { return String(x.id) === String(eventId); }) || events[0];
+    if (!e) {
+      content.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Evento no encontrado</div><button class="btn btn-primary" style="margin-top:1rem" onclick="navigate(\'events\')">← Eventos</button></div>';
+      return;
+    }
+    var sel = AppState.selectedTicketType;
+    content.innerHTML = ''
+      + '<button onclick="navigate(\'events\')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Eventos</button>'
+      + '<div style="border-radius:var(--radius-xl);overflow:hidden;border:1px solid var(--border);margin-bottom:1.5rem">'
+      + '<div style="height:160px;background:linear-gradient(135deg,#1a0820,#3d0055);display:flex;align-items:center;justify-content:center;font-size:5rem;position:relative">'
+      + (e.coverImage || '🌌')
+      + '<span class="badge badge-primary" style="position:absolute;top:0.75rem;left:0.75rem">Evento</span></div>'
+      + '<div style="padding:1rem"><h2 style="font-size:1.3rem;font-weight:900">' + (e.title || '') + '</h2>'
+      + '<div style="color:var(--text-muted);font-size:0.85rem;margin-top:0.3rem">📅 ' + (e.startAt ? new Date(e.startAt).toLocaleDateString('es-ES') : '') + '</div>'
+      + '<div style="color:var(--primary);font-size:0.85rem;font-weight:600">📍 ' + (e.venue || '') + '</div></div></div>'
+      + '<h3 style="font-family:var(--font-display);font-size:0.85rem;font-weight:700;margin-bottom:1rem">Seleccionar Tipo de Acceso</h3>'
+      + [
+        { type: 'general', label: 'Acceso General', desc: 'Acceso completo', price: 45, avail: 'Disponible', remaining: 500 },
+        { type: 'vip', label: 'VIP Astral Pass ✦', desc: 'VIP lounge & Fast track', price: 120, avail: 'Limitado', remaining: 200 },
+        { type: 'backstage', label: 'Backstage Pass 👑', desc: 'Meet & greet artistas', price: 200, avail: 'Exclusivo', remaining: 50 }
+      ].map(function (t) {
+        return '<div class="ticket ' + (sel === t.type ? 'selected' : '') + '" onclick="selectTicket(\'' + t.type + '\')" style="margin-bottom:0.75rem">'
+          + '<div class="ticket-inner"><div><div style="font-weight:800;font-size:1rem">' + t.label + '</div>'
+          + '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem">' + t.desc + '</div>'
+          + '<div style="font-size:0.7rem;margin-top:0.3rem;color:var(--green)">' + t.remaining + ' disponibles</div></div>'
+          + '<div style="text-align:right"><div style="color:var(--primary);font-family:var(--font-display);font-size:1.1rem;font-weight:700">$' + t.price + '</div>'
+          + '<div style="font-size:0.65rem;text-transform:uppercase;font-weight:700;color:var(--text-muted)">' + t.avail + '</div></div></div></div>';
+      }).join('')
+      + '<div class="glass-card" style="padding:1.5rem;margin:1.5rem 0;text-align:center">'
+      + '<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.15em;color:var(--primary);font-weight:700;margin-bottom:1rem">Pase Digital de Entrada</div>'
+      + '<div style="background:white;border-radius:var(--radius-lg);padding:1rem;display:inline-block;position:relative">' + generateQR() + '</div>'
+      + '<div style="margin-top:1rem"><div style="font-family:var(--font-display);font-size:1rem;font-weight:700">AX-' + (100 + Math.floor(Math.random() * 899)) + '-PARAISO</div>'
+      + '<div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.3rem">Escanear en la puerta</div></div></div>'
+      + '<button class="btn btn-primary btn-full" style="font-size:1rem;padding:1rem" onclick="purchaseTicket(\'' + e.id + '\')">🛍️ Comprar con Seguridad</button>'
+      + '<div style="text-align:center;margin-top:0.75rem;font-size:0.75rem;color:var(--text-muted)">🔒 Pago seguro</div>';
+  } catch (err) {
+    content.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Error al cargar evento</div><button class="btn btn-primary" style="margin-top:1rem" onclick="navigate(\'events\')">← Eventos</button></div>';
+  }
 }
 
 function selectTicket(type) {
-  DATABASE.state.selectedTicketType = type;
-  const eventId = DATABASE.state.selectedEvent;
-  renderTicketsPage(eventId);
+  AppState.selectedTicketType = type;
+  if (AppState.selectedEventId) renderTicketsPage(AppState.selectedEventId);
 }
 
 function generateQR() {
@@ -831,28 +817,25 @@ function purchaseTicket(eventId) {
 }
 
 // ── PAYMENT MODAL ─────────────────────────────────────────────────────────────
+// Usa AppState.selectedEventId y selectedTicketType. Sin DATABASE.
 function renderPaymentModal() {
-  const e = DATABASE.events.find(x => x.id === DATABASE.state.selectedEvent) || DATABASE.events[0];
-  const typeMap = { general: { label: 'Acceso General', price: e.ticketGeneral }, vip: { label: 'VIP Astral Pass', price: e.ticketVIP }, backstage: { label: 'Backstage Pass', price: e.ticketBackstage } };
-  const t = typeMap[DATABASE.state.selectedTicketType] || typeMap.general;
-  const modal = document.getElementById('modal-payment');
-  modal.querySelector('.bottom-sheet').innerHTML = `
-    <div class="sheet-handle"></div>
-    <div class="sheet-title">💳 Finalizar Compra</div>
-    <div class="glass-card" style="padding:0.75rem 1rem;margin-bottom:1.2rem;display:flex;justify-content:space-between;align-items:center">
-      <div><div style="font-weight:700">${e.title}</div><div style="font-size:0.8rem;color:var(--text-muted)">${t.label}</div></div>
-      <div style="font-family:var(--font-display);color:var(--primary);font-size:1.1rem;font-weight:700">$${t.price}</div>
-    </div>
-    <div class="form-group"><label>Nombre completo</label><input class="input" type="text" placeholder="Tu nombre" id="pay-name" /></div>
-    <div class="form-group"><label>Email</label><input class="input" type="email" placeholder="tu@email.com" id="pay-email" /></div>
-    <div class="form-group"><label>Número de tarjeta</label><input class="input" type="text" placeholder="1234 5678 9012 3456" maxlength="19" /></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1rem">
-      <div class="form-group" style="margin-bottom:0"><label>Vencimiento</label><input class="input" type="text" placeholder="MM/AA" /></div>
-      <div class="form-group" style="margin-bottom:0"><label>CVV</label><input class="input" type="text" placeholder="123" maxlength="3" /></div>
-    </div>
-    <button class="btn btn-primary btn-full" style="font-size:1rem;padding:1rem;margin-top:0.5rem" onclick="confirmPayment()">🔐 Confirmar Pago · $${t.price}</button>
-    <button class="btn btn-ghost btn-full" style="margin-top:0.5rem" onclick="closeModal('modal-payment')">Cancelar</button>
-  `;
+  var typeMap = { general: { label: 'Acceso General', price: 45 }, vip: { label: 'VIP Astral Pass', price: 120 }, backstage: { label: 'Backstage Pass', price: 200 } };
+  var t = typeMap[AppState.selectedTicketType] || typeMap.general;
+  var modal = document.getElementById('modal-payment');
+  var title = AppState.selectedEventId ? 'Evento' : 'Entrada';
+  modal.querySelector('.bottom-sheet').innerHTML = ''
+    + '<div class="sheet-handle"></div><div class="sheet-title">💳 Finalizar Compra</div>'
+    + '<div class="glass-card" style="padding:0.75rem 1rem;margin-bottom:1.2rem;display:flex;justify-content:space-between;align-items:center">'
+    + '<div><div style="font-weight:700">' + title + '</div><div style="font-size:0.8rem;color:var(--text-muted)">' + t.label + '</div></div>'
+    + '<div style="font-family:var(--font-display);color:var(--primary);font-size:1.1rem;font-weight:700">$' + t.price + '</div></div>'
+    + '<div class="form-group"><label>Nombre completo</label><input class="input" type="text" placeholder="Tu nombre" id="pay-name" /></div>'
+    + '<div class="form-group"><label>Email</label><input class="input" type="email" placeholder="tu@email.com" id="pay-email" /></div>'
+    + '<div class="form-group"><label>Número de tarjeta</label><input class="input" type="text" placeholder="1234 5678 9012 3456" maxlength="19" /></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1rem">'
+    + '<div class="form-group" style="margin-bottom:0"><label>Vencimiento</label><input class="input" type="text" placeholder="MM/AA" /></div>'
+    + '<div class="form-group" style="margin-bottom:0"><label>CVV</label><input class="input" type="text" placeholder="123" maxlength="3" /></div></div>'
+    + '<button class="btn btn-primary btn-full" style="font-size:1rem;padding:1rem;margin-top:0.5rem" onclick="confirmPayment()">🔐 Confirmar Pago · $' + t.price + '</button>'
+    + '<button class="btn btn-ghost btn-full" style="margin-top:0.5rem" onclick="closeModal(\'modal-payment\')">Cancelar</button>';
 }
 
 function confirmPayment() {
@@ -861,71 +844,88 @@ function confirmPayment() {
   // Note: Payment processing would go here with real backend integration
 }
 
+// Noticias: datos locales (sin backend ni DATABASE). Sustituir por GET /api/news cuando exista.
+var NEWS_LIST = [];
+
+function renderNews() {
+  var el = document.getElementById('page-news');
+  if (!el) return;
+  var content = el.querySelector('.page-content');
+  if (!content) return;
+  content.innerHTML = '<div class="section-header"><span class="section-title">Noticias & Novedades</span></div>'
+    + '<div class="search-bar" style="margin-bottom:1rem"><span class="search-icon">🔍</span>'
+    + '<input class="input" type="text" placeholder="Buscar noticias..." id="search-news" oninput="filterNews(this.value)" /></div>'
+    + '<div id="news-list">'
+    + (NEWS_LIST.length === 0 ? '<div class="empty-state"><div class="empty-icon">📰</div><div class="empty-title">Sin noticias</div></div>' : NEWS_LIST.map(function (n) {
+      return '<div class="list-item" onclick="navigate(\'news-detail\',' + n.id + ')"><div class="list-icon" style="font-size:1.5rem">' + (n.emoji || '📰') + '</div><div class="list-body"><div style="font-size:0.6rem;color:var(--primary);text-transform:uppercase;font-weight:700">' + (n.category || '') + '</div><div class="list-title">' + (n.title || '') + '</div></div></div>';
+    }).join(''))
+    + '</div>';
+}
+
 function filterNews(q) {
-  const filtered = DATABASE.news.filter(n => n.title.toLowerCase().includes(q.toLowerCase()) || n.category.toLowerCase().includes(q.toLowerCase()));
-  const list = document.getElementById('news-list');
-  if (list) list.innerHTML = filtered.map(n => `<div class="list-item" onclick="navigate('news-detail',${n.id})"><div class="list-icon" style="font-size:1.5rem">${n.emoji}</div><div class="list-body"><div style="font-size:0.6rem;color:var(--primary);text-transform:uppercase;font-weight:700">${n.category}</div><div class="list-title">${n.title}</div></div></div>`).join('');
+  var filtered = NEWS_LIST.filter(function (n) {
+    return (n.title && n.title.toLowerCase().indexOf((q || '').toLowerCase()) !== -1) ||
+      (n.category && n.category.toLowerCase().indexOf((q || '').toLowerCase()) !== -1);
+  });
+  var list = document.getElementById('news-list');
+  if (list) list.innerHTML = filtered.map(function (n) {
+    return '<div class="list-item" onclick="navigate(\'news-detail\',' + n.id + ')"><div class="list-icon" style="font-size:1.5rem">' + (n.emoji || '📰') + '</div><div class="list-body"><div style="font-size:0.6rem;color:var(--primary);text-transform:uppercase;font-weight:700">' + (n.category || '') + '</div><div class="list-title">' + (n.title || '') + '</div></div></div>';
+  }).join('');
 }
 
 function renderNewsDetail(newsId) {
-  const n = DATABASE.news.find(x => x.id === newsId);
-  if (!n) return;
-  const el = document.getElementById('page-news-detail');
-  const content = el.querySelector('.page-content');
-  content.innerHTML = `
-    <button onclick="navigate('news')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Noticias</button>
-    <div style="text-align:center;font-size:5rem;margin:1.5rem 0">${n.emoji}</div>
-    <span class="badge badge-glass">${n.category}</span>
-    <h2 style="font-size:1.4rem;font-weight:900;margin:0.75rem 0">${n.title}</h2>
-    <div style="color:var(--text-muted);font-size:0.8rem;margin-bottom:1.2rem">📅 ${n.date}</div>
-    <div class="divider"></div>
-    <p style="font-size:0.95rem;line-height:1.8;margin-top:1rem;color:rgba(240,230,255,0.85)">${n.body} Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-    <p style="font-size:0.95rem;line-height:1.8;margin-top:1rem;color:rgba(240,230,255,0.85)">Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
-    <div style="margin-top:1.5rem">
-      <button class="btn btn-outline btn-full" onclick="toast('📤 Compartido!')">📤 Compartir</button>
-    </div>
-  `;
+  var n = NEWS_LIST.find(function (x) { return x.id === newsId; });
+  var el = document.getElementById('page-news-detail');
+  var content = el.querySelector('.page-content');
+  if (!n) {
+    content.innerHTML = '<button onclick="navigate(\'news\')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Noticias</button><div class="empty-state"><div class="empty-icon">📰</div><div class="empty-title">Noticia no encontrada</div></div>';
+    return;
+  }
+  content.innerHTML = '<button onclick="navigate(\'news\')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Noticias</button>'
+    + '<div style="text-align:center;font-size:5rem;margin:1.5rem 0">' + (n.emoji || '📰') + '</div>'
+    + '<span class="badge badge-glass">' + (n.category || '') + '</span>'
+    + '<h2 style="font-size:1.4rem;font-weight:900;margin:0.75rem 0">' + (n.title || '') + '</h2>'
+    + '<div style="color:var(--text-muted);font-size:0.8rem;margin-bottom:1.2rem">📅 ' + (n.date || '') + '</div><div class="divider"></div>'
+    + '<p style="font-size:0.95rem;line-height:1.8;margin-top:1rem;color:rgba(240,230,255,0.85)">' + (n.body || '') + '</p>'
+    + '<div style="margin-top:1.5rem"><button class="btn btn-outline btn-full" onclick="toast(\'📤 Compartido!\')">📤 Compartir</button></div>';
 }
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
+// Estado local (sin backend ni DATABASE). Sustituir por API cuando exista.
+var NOTIFICATIONS_LIST = [];
+
 function renderNotifications() {
-  const el = document.getElementById('page-notifications');
-  const content = el.querySelector('.page-content');
-  content.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-      <span style="font-size:0.8rem;color:var(--text-muted)">${DATABASE.notifications.filter(n=>n.unread).length} sin leer</span>
-      <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.3rem 0.75rem" onclick="markAllRead()">Marcar todo</button>
-    </div>
-    <div id="notif-list">
-      ${DATABASE.notifications.map(n => `
-        <div class="notif-item ${n.unread ? 'unread' : ''}" onclick="markRead(${n.id})">
-          ${n.unread ? '<div class="notif-dot-badge"></div>' : '<div style="width:8px;flex-shrink:0"></div>'}
-          <div class="notif-body">
-            <div class="notif-text">${n.text}</div>
-            <div class="notif-time">${n.time}</div>
-          </div>
-        </div>`).join('')}
-    </div>
-  `;
+  var el = document.getElementById('page-notifications');
+  var content = el.querySelector('.page-content');
+  var unreadCount = NOTIFICATIONS_LIST.filter(function (n) { return n.unread; }).length;
+  content.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">'
+    + '<span style="font-size:0.8rem;color:var(--text-muted)">' + unreadCount + ' sin leer</span>'
+    + '<button class="btn btn-ghost" style="font-size:0.75rem;padding:0.3rem 0.75rem" onclick="markAllRead()">Marcar todo</button></div>'
+    + '<div id="notif-list">'
+    + (NOTIFICATIONS_LIST.length === 0 ? '<div class="empty-state"><div class="empty-icon">🔔</div><div class="empty-title">Sin notificaciones</div></div>' : NOTIFICATIONS_LIST.map(function (n) {
+      return '<div class="notif-item ' + (n.unread ? 'unread' : '') + '" onclick="markRead(' + n.id + ')">'
+        + (n.unread ? '<div class="notif-dot-badge"></div>' : '<div style="width:8px;flex-shrink:0"></div>')
+        + '<div class="notif-body"><div class="notif-text">' + (n.text || '') + '</div><div class="notif-time">' + (n.time || '') + '</div></div></div>';
+    }).join(''))
+    + '</div>';
 }
 
 function markRead(id) {
-  const n = DATABASE.notifications.find(x => x.id === id);
-  if (n) { n.unread = false; }
+  var n = NOTIFICATIONS_LIST.find(function (x) { return x.id === id; });
+  if (n) n.unread = false;
   updateNotifBadge();
   renderNotifications();
 }
 
 function markAllRead() {
-  DATABASE.notifications.forEach(n => n.unread = false);
+  NOTIFICATIONS_LIST.forEach(function (n) { n.unread = false; });
   updateNotifBadge();
   renderNotifications();
 }
 
 function updateNotifBadge() {
-  const count = DATABASE.notifications.filter(n => n.unread).length;
-  DATABASE.state.unreadNotifs = count;
-  const dot = document.querySelector('.notif-dot');
+  var count = NOTIFICATIONS_LIST.filter(function (n) { return n.unread; }).length;
+  var dot = document.querySelector('.notif-dot');
   if (dot) dot.style.display = count > 0 ? 'block' : 'none';
 }
 
@@ -1044,152 +1044,106 @@ async function renderAdmin() {
 }
 
 // ── RRPP PAGE ────────────────────────────────────────────────────────────────
+// Sin backend RRPP ni DATABASE. Lista local vacía; sustituir por GET /api/rrpp cuando exista.
+var RRPP_LIST = [];
+
 function renderRRPP() {
-  const el = document.getElementById('page-rrpp');
-  const content = el.querySelector('.page-content');
-  const totalRev = DATABASE.rrpp.reduce((s, r) => s + r.revenue, 0);
-  const totalComm = DATABASE.rrpp.reduce((s, r) => s + r.earned, 0);
-  const totalSold = DATABASE.rrpp.reduce((s, r) => s + r.sold, 0);
+  var el = document.getElementById('page-rrpp');
+  var content = el.querySelector('.page-content');
+  var totalRev = RRPP_LIST.reduce(function (s, r) { return s + (r.revenue || 0); }, 0);
+  var totalComm = RRPP_LIST.reduce(function (s, r) { return s + (r.earned || 0); }, 0);
+  var totalSold = RRPP_LIST.reduce(function (s, r) { return s + (r.sold || 0); }, 0);
+  var activeCount = RRPP_LIST.filter(function (r) { return r.active; }).length;
 
-  content.innerHTML = `
-    <div class="stats-grid" style="margin-bottom:1.5rem">
-      <div class="stat-card"><div class="stat-label">Revenue RRPP</div><div class="stat-value" style="font-size:1.1rem">$${(totalRev/1000).toFixed(1)}k</div></div>
-      <div class="stat-card"><div class="stat-label">Comisiones</div><div class="stat-value" style="font-size:1.1rem;color:var(--green)">$${totalComm.toFixed(0)}</div></div>
-      <div class="stat-card"><div class="stat-label">Entradas</div><div class="stat-value" style="font-size:1.1rem">${totalSold}</div></div>
-      <div class="stat-card"><div class="stat-label">RRPP Activos</div><div class="stat-value" style="font-size:1.1rem">${DATABASE.rrpp.filter(r=>r.active).length}</div></div>
-    </div>
-
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-      <div class="section-title font-display">Equipo RRPP</div>
-      <button class="btn btn-primary" style="padding:0.4rem 0.9rem;font-size:0.8rem" onclick="openModal('modal-add-rrpp')">+ Agregar</button>
-    </div>
-
-    ${DATABASE.rrpp.map(r => `
-      <div class="rrpp-card" onclick="navigate('rrpp-detail',${r.id})">
-        <div class="rrpp-avatar" style="opacity:${r.active?1:0.5}">${r.name[0]}</div>
-        <div class="rrpp-info">
-          <div class="rrpp-name">${r.name} ${r.active ? '' : '<span style="font-size:0.65rem;color:var(--text-muted)">(Inactivo)</span>'}</div>
-          <div class="rrpp-stats">🎫 ${r.sold} vendidas · 📧 ${r.email}</div>
-          <div class="rrpp-stats">💰 Com: ${(r.commission*100).toFixed(0)}%</div>
-        </div>
-        <div class="rrpp-revenue">
-          <div class="rrpp-amount">$${(r.revenue/1000).toFixed(1)}k</div>
-          <div class="rrpp-comm">Com: $${r.earned.toFixed(0)}</div>
-        </div>
-      </div>`).join('')}
-
-    <div style="margin-top:1rem">
-      <button class="btn btn-outline btn-full" onclick="exportData()">📊 Exportar reporte RRPP</button>
-    </div>
-  `;
+  content.innerHTML = '<div class="stats-grid" style="margin-bottom:1.5rem">'
+    + '<div class="stat-card"><div class="stat-label">Revenue RRPP</div><div class="stat-value" style="font-size:1.1rem">$' + (totalRev / 1000).toFixed(1) + 'k</div></div>'
+    + '<div class="stat-card"><div class="stat-label">Comisiones</div><div class="stat-value" style="font-size:1.1rem;color:var(--green)">$' + totalComm.toFixed(0) + '</div></div>'
+    + '<div class="stat-card"><div class="stat-label">Entradas</div><div class="stat-value" style="font-size:1.1rem">' + totalSold + '</div></div>'
+    + '<div class="stat-card"><div class="stat-label">RRPP Activos</div><div class="stat-value" style="font-size:1.1rem">' + activeCount + '</div></div></div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">'
+    + '<div class="section-title font-display">Equipo RRPP</div>'
+    + '<button class="btn btn-primary" style="padding:0.4rem 0.9rem;font-size:0.8rem" onclick="openModal(\'modal-add-rrpp\')">+ Agregar</button></div>'
+    + (RRPP_LIST.length === 0 ? '<div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">Sin datos RRPP</div><div style="font-size:0.85rem;color:var(--text-muted);margin-top:0.5rem">El backend puede exponer GET /api/rrpp en el futuro.</div></div>' : RRPP_LIST.map(function (r) {
+      return '<div class="rrpp-card" onclick="navigate(\'rrpp-detail\',' + r.id + ')">'
+        + '<div class="rrpp-avatar" style="opacity:' + (r.active ? 1 : 0.5) + '">' + (r.name ? r.name[0] : '?') + '</div>'
+        + '<div class="rrpp-info"><div class="rrpp-name">' + (r.name || '') + '</div>'
+        + '<div class="rrpp-stats">🎫 ' + (r.sold || 0) + ' vendidas · 📧 ' + (r.email || '') + '</div></div>'
+        + '<div class="rrpp-revenue"><div class="rrpp-amount">$' + ((r.revenue || 0) / 1000).toFixed(1) + 'k</div></div></div>';
+    }).join(''))
+    + '<div style="margin-top:1rem"><button class="btn btn-outline btn-full" onclick="exportData()">📊 Exportar reporte RRPP</button></div>';
 }
 
 function renderRRPPDetail(rrppId) {
-  const r = DATABASE.rrpp.find(x => x.id === rrppId);
-  if (!r) return;
-  const el = document.getElementById('page-rrpp-detail');
-  const content = el.querySelector('.page-content');
-
-  content.innerHTML = `
-    <button onclick="navigate('rrpp')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← RRPP</button>
-    <div style="text-align:center;margin-bottom:1.5rem">
-      <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6b1a8a);margin:0 auto 1rem;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;box-shadow:0 0 20px var(--primary-glow)">${r.name[0]}</div>
-      <h2 style="font-size:1.5rem;font-weight:900">${r.name}</h2>
-      <div style="color:var(--text-muted);font-size:0.85rem;margin:0.3rem 0">${r.email} · ${r.phone}</div>
-      <span class="badge ${r.active?'badge-cyan':'badge-glass'}">${r.active?'✅ Activo':'❌ Inactivo'}</span>
-    </div>
-
-    <div class="stats-grid" style="margin-bottom:1.5rem">
-      <div class="stat-card"><div class="stat-label">Revenue</div><div class="stat-value">$${(r.revenue/1000).toFixed(1)}k</div><div class="stat-change stat-up">📈</div></div>
-      <div class="stat-card"><div class="stat-label">Comisión</div><div class="stat-value" style="color:var(--green)">$${r.earned.toFixed(0)}</div><div class="stat-change">💰 Listo</div></div>
-      <div class="stat-card"><div class="stat-label">Entradas</div><div class="stat-value">${r.sold}</div></div>
-      <div class="stat-card"><div class="stat-label">% Comisión</div><div class="stat-value">${(r.commission*100).toFixed(0)}%</div></div>
-    </div>
-
-    <div class="section-header"><span class="section-title">Ventas Recientes</span></div>
-    ${r.sales.length === 0 ? '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-title">Sin ventas recientes</div></div>' :
-      r.sales.map(s => `
-        <div class="list-item">
-          <div class="list-icon">🎫</div>
-          <div class="list-body"><div class="list-title">${s.buyer}</div><div class="list-subtitle">${s.ticket} · ${s.time}</div></div>
-          <div class="list-right"><div style="color:var(--green);font-weight:700">+$${s.amount}</div><div style="font-size:0.65rem;color:var(--text-muted)">Com: $${(s.amount*r.commission).toFixed(2)}</div></div>
-        </div>`).join('')}
-
-    <div style="margin-top:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
-      <button class="btn btn-primary" onclick="toast('📋 Link copiado!')">📤 Copiar Link</button>
-      <button class="btn btn-outline" onclick="toggleRRPP(${r.id})">${r.active?'❌ Desactivar':'✅ Activar'}</button>
-    </div>
-  `;
+  var r = RRPP_LIST.find(function (x) { return x.id === rrppId; });
+  var el = document.getElementById('page-rrpp-detail');
+  var content = el.querySelector('.page-content');
+  if (!r) {
+    content.innerHTML = '<button onclick="navigate(\'rrpp\')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← RRPP</button><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">RRPP no encontrado</div></div>';
+    return;
+  }
+  content.innerHTML = '<button onclick="navigate(\'rrpp\')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← RRPP</button>'
+    + '<div style="text-align:center;margin-bottom:1.5rem"><div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6b1a8a);margin:0 auto 1rem;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700">' + (r.name ? r.name[0] : '?') + '</div>'
+    + '<h2 style="font-size:1.5rem;font-weight:900">' + (r.name || '') + '</h2><div style="color:var(--text-muted);font-size:0.85rem">' + (r.email || '') + '</div></div>'
+    + '<div class="stats-grid" style="margin-bottom:1.5rem">'
+    + '<div class="stat-card"><div class="stat-label">Revenue</div><div class="stat-value">$' + ((r.revenue || 0) / 1000).toFixed(1) + 'k</div></div>'
+    + '<div class="stat-card"><div class="stat-label">Entradas</div><div class="stat-value">' + (r.sold || 0) + '</div></div></div>';
 }
 
 function toggleRRPP(id) {
-  const r = DATABASE.rrpp.find(x => x.id === id);
+  var r = RRPP_LIST.find(function (x) { return x.id === id; });
   if (r) { r.active = !r.active; toast(r.active ? '✅ RRPP activado' : '❌ RRPP desactivado'); renderRRPPDetail(id); }
 }
 
-// ── ADD RRPP MODAL ─────────────────────────────────────────────────────────────
 function renderAddRRPPModal() {
-  const modal = document.getElementById('modal-add-rrpp');
-  modal.querySelector('.bottom-sheet').innerHTML = `
-    <div class="sheet-handle"></div>
-    <div class="sheet-title">👥 Nuevo RRPP</div>
-    <div class="form-group"><label>Nombre completo</label><input class="input" type="text" placeholder="Nombre" id="rrpp-name" /></div>
-    <div class="form-group"><label>Email</label><input class="input" type="email" placeholder="email@ejemplo.com" id="rrpp-email" /></div>
-    <div class="form-group"><label>Teléfono</label><input class="input" type="tel" placeholder="+54 911..." id="rrpp-phone" /></div>
-    <div class="form-group"><label>Comisión (%)</label><input class="input" type="number" placeholder="15" value="15" min="5" max="30" id="rrpp-comm" /></div>
-    <button class="btn btn-primary btn-full" style="margin-top:0.5rem" onclick="addRRPP()">✅ Agregar RRPP</button>
-    <button class="btn btn-ghost btn-full" style="margin-top:0.5rem" onclick="closeModal('modal-add-rrpp')">Cancelar</button>
-  `;
+  var modal = document.getElementById('modal-add-rrpp');
+  modal.querySelector('.bottom-sheet').innerHTML = '<div class="sheet-handle"></div><div class="sheet-title">👥 Nuevo RRPP</div>'
+    + '<div class="form-group"><label>Nombre completo</label><input class="input" type="text" placeholder="Nombre" id="rrpp-name" /></div>'
+    + '<div class="form-group"><label>Email</label><input class="input" type="email" placeholder="email@ejemplo.com" id="rrpp-email" /></div>'
+    + '<div class="form-group"><label>Teléfono</label><input class="input" type="tel" placeholder="+54 911..." id="rrpp-phone" /></div>'
+    + '<div class="form-group"><label>Comisión (%)</label><input class="input" type="number" placeholder="15" value="15" min="5" max="30" id="rrpp-comm" /></div>'
+    + '<button class="btn btn-primary btn-full" style="margin-top:0.5rem" onclick="addRRPP()">✅ Agregar RRPP</button>'
+    + '<button class="btn btn-ghost btn-full" style="margin-top:0.5rem" onclick="closeModal(\'modal-add-rrpp\')">Cancelar</button>';
 }
 
 function addRRPP() {
-  const name = document.getElementById('rrpp-name').value.trim();
-  const email = document.getElementById('rrpp-email').value.trim();
-  const phone = document.getElementById('rrpp-phone').value.trim();
-  const comm = parseFloat(document.getElementById('rrpp-comm').value) / 100;
+  var name = document.getElementById('rrpp-name') && document.getElementById('rrpp-name').value.trim();
+  var email = document.getElementById('rrpp-email') && document.getElementById('rrpp-email').value.trim();
   if (!name || !email) { toast('⚠️ Completa nombre y email'); return; }
-  DATABASE.rrpp.push({ id: Date.now(), name, email, phone, commission: comm || 0.15, sold: 0, revenue: 0, earned: 0, joinDate: new Date().toISOString().slice(0,10), active: true, sales: [] });
+  RRPP_LIST.push({ id: Date.now(), name: name, email: email, phone: '', commission: 0.15, sold: 0, revenue: 0, earned: 0, joinDate: new Date().toISOString().slice(0, 10), active: true, sales: [] });
   closeModal('modal-add-rrpp');
-  toast(`✅ ${name} agregado como RRPP!`);
+  toast('✅ ' + name + ' agregado como RRPP (local). Backend puede persistir en el futuro.');
   renderRRPP();
 }
 
 // ── PROFILE PAGE ─────────────────────────────────────────────────────────────
+// Usa AppState.currentUser (GET /api/me). Sin DATABASE.
 function renderProfile() {
-  const el = document.getElementById('page-profile');
-  const content = el.querySelector('.page-content');
-  content.innerHTML = `
-    <div style="margin:-0.5rem -1rem 1.5rem;background:linear-gradient(135deg,#1a0820,#3d0055,#1a0820);height:140px;display:flex;align-items:center;justify-content:center;font-size:4rem;position:relative">
-      🌌
-    </div>
-    <div style="text-align:center;margin-top:-50px;position:relative;z-index:1;margin-bottom:1.5rem">
-      <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6b1a8a);border:3px solid var(--primary);margin:0 auto 0.75rem;display:flex;align-items:center;justify-content:center;font-size:2rem;box-shadow:0 0 20px var(--primary-glow)">👤</div>
-      <h2 style="font-size:1.3rem;font-weight:900">Admin Cósmico</h2>
-      <div style="color:var(--primary);font-size:0.85rem;font-weight:600">Paraíso Astral · Administrador</div>
-    </div>
-
-    <div class="stats-grid" style="margin-bottom:1.5rem">
-      <div class="stat-card" style="text-align:center"><div class="stat-label">Eventos</div><div class="stat-value">${DATABASE.events.length}</div></div>
-      <div class="stat-card" style="text-align:center"><div class="stat-label">Artistas</div><div class="stat-value">${DATABASE.artists.length}</div></div>
-      <div class="stat-card" style="text-align:center"><div class="stat-label">RRPP</div><div class="stat-value">${DATABASE.rrpp.length}</div></div>
-      <div class="stat-card" style="text-align:center"><div class="stat-label">Noticias</div><div class="stat-value">${DATABASE.news.length}</div></div>
-    </div>
-
-    <div class="section-title font-display" style="margin-bottom:0.75rem">Configuración</div>
-    ${[
+  var user = AppState.currentUser;
+  var displayName = (user && user.displayName) ? user.displayName : (user && user.email) ? user.email : 'Usuario';
+  var roleLabel = (user && user.role) ? user.role : '—';
+  var el = document.getElementById('page-profile');
+  var content = el.querySelector('.page-content');
+  content.innerHTML = '<div style="margin:-0.5rem -1rem 1.5rem;background:linear-gradient(135deg,#1a0820,#3d0055,#1a0820);height:140px;display:flex;align-items:center;justify-content:center;font-size:4rem;position:relative">🌌</div>'
+    + '<div style="text-align:center;margin-top:-50px;position:relative;z-index:1;margin-bottom:1.5rem">'
+    + '<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6b1a8a);border:3px solid var(--primary);margin:0 auto 0.75rem;display:flex;align-items:center;justify-content:center;font-size:2rem;box-shadow:0 0 20px var(--primary-glow)">👤</div>'
+    + '<h2 style="font-size:1.3rem;font-weight:900">' + displayName + '</h2>'
+    + '<div style="color:var(--primary);font-size:0.85rem;font-weight:600">Paraíso Astral · ' + roleLabel + '</div></div>'
+    + '<div class="stats-grid" style="margin-bottom:1.5rem">'
+    + '<div class="stat-card" style="text-align:center"><div class="stat-label">Eventos</div><div class="stat-value">—</div></div>'
+    + '<div class="stat-card" style="text-align:center"><div class="stat-label">Artistas</div><div class="stat-value">—</div></div>'
+    + '<div class="stat-card" style="text-align:center"><div class="stat-label">RRPP</div><div class="stat-value">' + RRPP_LIST.length + '</div></div>'
+    + '<div class="stat-card" style="text-align:center"><div class="stat-label">Noticias</div><div class="stat-value">' + NEWS_LIST.length + '</div></div></div>'
+    + '<div class="section-title font-display" style="margin-bottom:0.75rem">Configuración</div>'
+    + [
       { icon: '🔔', label: 'Notificaciones', action: "navigate('notifications')" },
       { icon: '👥', label: 'Gestionar RRPP', action: "navigate('rrpp')" },
       { icon: '📊', label: 'Panel Admin', action: "navigate('admin')" },
       { icon: '📤', label: 'Exportar Datos', action: "exportData()" },
       { icon: '📱', label: 'Instalar App (PWA)', action: "installPWA()" },
-      { icon: '🌙', label: 'Modo oscuro', action: "toast('🌙 Ya estás en modo oscuro!')" },
-    ].map(item => `
-      <div class="list-item" onclick="${item.action}" style="margin-bottom:0.5rem">
-        <div class="list-icon">${item.icon}</div>
-        <div class="list-body"><div class="list-title">${item.label}</div></div>
-        <span style="color:var(--primary)">›</span>
-      </div>`).join('')}
-  `;
+      { icon: '🌙', label: 'Modo oscuro', action: "toast('🌙 Ya estás en modo oscuro!')" }
+    ].map(function (item) {
+      return '<div class="list-item" onclick="' + item.action + '" style="margin-bottom:0.5rem"><div class="list-icon">' + item.icon + '</div><div class="list-body"><div class="list-title">' + item.label + '</div></div><span style="color:var(--primary)">›</span></div>';
+    }).join('');
 }
 
 let deferredPrompt = null;
@@ -1221,60 +1175,31 @@ function renderAddEventModal() {
 }
 
 function addEvent() {
-  const title = document.getElementById('ev-title').value.trim();
-  const venue = document.getElementById('ev-venue').value.trim();
-  const date = document.getElementById('ev-date').value;
+  var titleEl = document.getElementById('ev-title');
+  var venueEl = document.getElementById('ev-venue');
+  var dateEl = document.getElementById('ev-date');
+  var title = titleEl ? titleEl.value.trim() : '';
+  var venue = venueEl ? venueEl.value.trim() : '';
+  var date = dateEl ? dateEl.value : '';
   if (!title || !venue || !date) { toast('⚠️ Completa los campos requeridos'); return; }
-  const d = new Date(date);
-  const months = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
-  DATABASE.events.push({
-    id: Date.now(), title, venue, date,
-    time: document.getElementById('ev-time').value || "22:00 - 06:00",
-    month: months[d.getMonth()], day: String(d.getDate()).padStart(2,'0'),
-    status: "upcoming",
-    lineup: (document.getElementById('ev-lineup').value || "TBA").split(',').map(s=>s.trim()),
-    flyer: "🎵", description: "Nuevo evento de Paraíso Astral.",
-    ticketGeneral: parseFloat(document.getElementById('ev-gen').value)||45,
-    ticketVIP: parseFloat(document.getElementById('ev-vip').value)||120,
-    ticketBackstage: parseFloat(document.getElementById('ev-back').value)||200,
-    soldGeneral: 0, soldVIP: 0, soldBackstage: 0,
-    capacity: 1000, attendance: 0, tags: []
-  });
   closeModal('modal-add-event');
-  toast(`🎉 Evento "${title}" creado!`);
+  toast('🎉 Creación de evento próximamente vía backend.');
   renderEvents();
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  // Pequeño retraso para asegurar que todos los scripts estén cargados
-  setTimeout(() => {
-    // Inicializar componentes en orden correcto
-    if (typeof DATABASE !== 'undefined') {
-      console.log('DATABASE cargado');
-    }
-    
-    // Store eliminado, usando DATABASE directamente
-    console.log('Usando DATABASE directamente');
-    
-    // DATABASE ya está disponible, no se necesita inicialización
-    console.log('DATABASE cargado:', DATABASE.events.length + ' eventos disponibles');
-    
-    // Renderizar páginas iniciales
+// Solo pre-render de páginas públicas. Admin/RRPP se renderan al navegar (requieren auth).
+window.addEventListener('DOMContentLoaded', function () {
+  setTimeout(function () {
     renderHome();
     renderEvents();
     renderArtists();
-    renderAdmin();
-    renderRRPP();
     renderNews();
     renderNotifications();
     renderProfile();
-
-    // Register service worker
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
     }
-
     updateNotifBadge();
     navigate('home');
   }, 200);
