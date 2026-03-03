@@ -6,5 +6,5 @@ window.__ENV__ = {
   "VITE_FIREBASE_STORAGE_BUCKET": "paraiso-astral.firebasestorage.app",
   "VITE_FIREBASE_MESSAGING_SENDER_ID": "107383890809",
   "VITE_FIREBASE_APP_ID": "1:107383890809:web:530c77128259f2ca6305a8",
-  "VITE_API_BASE_URL": "https://paraiso-astral-api.onrender.com"
+  "VITE_API_BASE_URL": "https://paraiso-astral.onrender.com"
 };
