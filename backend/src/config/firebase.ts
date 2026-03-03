@@ -32,9 +32,15 @@ let firebaseApp: admin.app.App;
 if (admin.apps.length > 0) {
   firebaseApp = admin.apps[0]!;
 } else {
+  const projectId =
+    (serviceAccount as { projectId?: string; project_id?: string }).projectId ??
+    (serviceAccount as { project_id?: string }).project_id;
+  if (!projectId) {
+    throw new Error('Firebase credentials must include projectId or project_id');
+  }
   firebaseApp = admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    projectId: serviceAccount.project_id
+    projectId
   });
 }
 
