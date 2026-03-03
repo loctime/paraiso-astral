@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const outPath = path.join(__dirname, '..', 'js', 'env.public.js');
+const outPath = path.join(__dirname, '..', 'public', 'js', 'env.public.js');
 const envPath = path.join(__dirname, '..', '.env');
 
 const PUBLIC_KEYS = [
