@@ -5,11 +5,13 @@ import path from 'path';
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 import { PrismaClient, UserRole, UserStatus } from '@prisma/client';
+import { auth } from '../src/config/firebase';
 
 const prisma = new PrismaClient();
 
 async function main() {
   const email = process.env.BOOTSTRAP_ADMIN_EMAIL
+  const password = process.env.BOOTSTRAP_ADMIN_PASSWORD
 
   if (!email) {
     throw new Error('BOOTSTRAP_ADMIN_EMAIL no definido en .env')
@@ -40,6 +42,30 @@ async function main() {
     })
 
     console.log(`Usuario ADMIN creado para ${email}`)
+  }
+
+  // Crear o actualizar usuario en Firebase Auth (para poder hacer login)
+  if (password) {
+    try {
+      const existingFirebaseUser = await auth.getUserByEmail(email)
+      await auth.updateUser(existingFirebaseUser.uid, { password })
+      console.log(`Contraseña de Firebase actualizada para ${email}`)
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code
+      if (code === 'auth/user-not-found') {
+        await auth.createUser({ email, password, emailVerified: true })
+        console.log(`Usuario Firebase creado para ${email}`)
+      } else {
+        console.warn(
+          'No se pudo crear/actualizar el usuario en Firebase (permisos IAM o red).',
+          'Créalo manualmente en Firebase Console → Authentication → Users → Add user:',
+          email,
+          'Contraseña:', password
+        )
+      }
+    }
+  } else {
+    console.log('BOOTSTRAP_ADMIN_PASSWORD no definido: no se crea/actualiza usuario en Firebase. Créalalo manualmente en Firebase Console.')
   }
 }
 
