@@ -103,6 +103,9 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
 
     // Get total count for pagination
     const total = await prisma.event.count({ where });
+    // Diagnóstico: total en la tabla sin filtros (para detectar si el evento existe pero no pasa el filtro)
+    const totalInDb = await prisma.event.count({});
+    console.log('[GET /api/events] DB total (sin filtros):', totalInDb, '| con filtros (status=PUBLISHED, visibility=PUBLIC):', total);
 
     // Get events with pagination
     const events = await prisma.event.findMany({

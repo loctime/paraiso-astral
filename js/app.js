@@ -251,7 +251,7 @@ function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
 // ── HOME PAGE ────────────────────────────────────────────────────────────────
-async function renderHome() {
+async function renderHome(prependEvents) {
   const el = document.getElementById('page-home');
   const content = el.querySelector('.page-content');
   
@@ -261,7 +261,12 @@ async function renderHome() {
   try {
     // Fetch events from backend (público, sin login)
     const response = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
-    const events = response.data || [];
+    var events = response.data || [];
+    if (Array.isArray(prependEvents) && prependEvents.length) {
+      var ids = {};
+      events.forEach(function (e) { ids[e.id] = true; });
+      prependEvents.forEach(function (e) { if (!ids[e.id]) { events.unshift(e); ids[e.id] = true; } });
+    }
     console.log('[renderHome] GET /api/events →', events.length, 'events', events.length ? events.map(function (e) { return { id: e.id, title: e.title, startAt: e.startAt }; }) : []);
     if (!events || events.length === 0) {
       showErrorState(content, 'No hay eventos disponibles', null, {
@@ -364,7 +369,8 @@ function renderEventCardMini(e) {
 }
 
 // ── EVENTS PAGE ──────────────────────────────────────────────────────────────
-async function renderEvents(filter = 'upcoming') {
+async function renderEvents(filter, prependEvents) {
+  if (typeof filter !== 'string') filter = 'upcoming';
   const el = document.getElementById('page-events');
   const content = el.querySelector('.page-content');
   
@@ -391,7 +397,12 @@ async function renderEvents(filter = 'upcoming') {
   try {
     // Fetch events from backend (público, sin login)
     const response = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
-    const events = response.data || [];
+    var events = response.data || [];
+    if (Array.isArray(prependEvents) && prependEvents.length) {
+      var ids = {};
+      events.forEach(function (e) { ids[e.id] = true; });
+      prependEvents.forEach(function (e) { if (!ids[e.id]) { events.unshift(e); ids[e.id] = true; } });
+    }
     console.log('[renderEvents] GET /api/events filter=', filter, '→', events.length, 'events');
     if (!events || events.length === 0) {
       document.getElementById('events-list').innerHTML = '<div class="empty-state"><div class="empty-icon">🌌</div><div class="empty-title">Sin eventos</div></div>';
@@ -1220,8 +1231,9 @@ async function addEvent() {
     var res = await window.ApiClient.post('/api/events', payload);
     console.log('[addEvent] POST /api/events success:', res);
     toast('🎉 Evento creado correctamente.');
-    renderHome();
-    renderEvents();
+    var created = [res];
+    renderHome(created);
+    renderEvents('upcoming', created);
     var adminContent = document.querySelector('#page-admin .page-content');
     if (adminContent) renderAdmin();
   } catch (err) {
