@@ -249,6 +249,7 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       startAt?: string;
       endAt?: string;
       description?: string;
+      coverImage?: string;
     };
     const title = typeof body.title === 'string' ? body.title.trim() : '';
     const venue = typeof body.venue === 'string' ? body.venue.trim() : '';
@@ -266,6 +267,7 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
     }
 
     const description = typeof body.description === 'string' ? body.description.trim() : '';
+    const coverImage = typeof body.coverImage === 'string' && body.coverImage.trim() ? body.coverImage.trim() : null;
     const endAtRaw = body.endAt;
     let endAt: Date | null = null;
     if (endAtRaw) {
@@ -284,6 +286,7 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
         title,
         slug,
         description: description || title,
+        coverImage,
         startAt,
         endAt,
         venue,
@@ -312,6 +315,92 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
     res.status(201).json(eventPublic);
   } catch (error) {
     console.error('[POST /api/events] error:', error);
+    next(error);
+  }
+};
+
+/**
+ * PATCH /api/events/:eventId
+ * Actualizar evento (p. ej. coverImage). Solo quien puede editar (ADMIN/OWNER de la org del evento o admin global).
+ */
+export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user;
+    if (!user?.id) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    const eventId = req.params.eventId;
+    if (!eventId) {
+      res.status(400).json({ error: 'eventId required' });
+      return;
+    }
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) {
+      res.status(404).json({ error: 'Event not found' });
+      return;
+    }
+    const membership = await prisma.membership.findFirst({
+      where: {
+        userId: user.id,
+        organizationId: event.organizationId,
+        role: { in: [MembershipRole.ADMIN, MembershipRole.OWNER] },
+      },
+    });
+    const isGlobalAdmin = user.role === UserRole.ADMIN;
+    if (!membership && !isGlobalAdmin) {
+      res.status(403).json({ error: 'No tienes permiso para editar este evento' });
+      return;
+    }
+    const body = req.body as { coverImage?: string };
+    const updates: { coverImage?: string | null } = {};
+    if (typeof body.coverImage === 'string') {
+      updates.coverImage = body.coverImage.trim() || null;
+    }
+    if (Object.keys(updates).length === 0) {
+      const current = await prisma.event.findUnique({
+        where: { id: eventId },
+        include: { organization: { select: { id: true, name: true } } },
+      });
+      if (!current) {
+        res.status(404).json({ error: 'Event not found' });
+        return;
+      }
+      const eventPublic: EventPublic = {
+        id: current.id,
+        title: current.title,
+        slug: current.slug,
+        description: current.description,
+        coverImage: current.coverImage,
+        startAt: current.startAt,
+        endAt: current.endAt,
+        venue: current.venue,
+        city: current.city,
+        status: current.status,
+        organization: current.organization,
+      };
+      return res.json(eventPublic);
+    }
+    const updated = await prisma.event.update({
+      where: { id: eventId },
+      data: updates,
+      include: { organization: { select: { id: true, name: true } } },
+    });
+    const eventPublic: EventPublic = {
+      id: updated.id,
+      title: updated.title,
+      slug: updated.slug,
+      description: updated.description,
+      coverImage: updated.coverImage,
+      startAt: updated.startAt,
+      endAt: updated.endAt,
+      venue: updated.venue,
+      city: updated.city,
+      status: updated.status,
+      organization: updated.organization,
+    };
+    res.json(eventPublic);
+  } catch (error) {
     next(error);
   }
 };

@@ -101,8 +101,8 @@ async function request(path, options = {}) {
       headers,
     };
 
-    // Add body for POST/PUT requests
-    if (body && (method === 'POST' || method === 'PUT')) {
+    // Add body for POST/PUT/PATCH requests
+    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
       config.body = JSON.stringify(body);
     }
 
@@ -230,6 +230,31 @@ async function del(path, options = {}) {
   return request(path, { ...options, method: 'DELETE' });
 }
 
+/**
+ * Upload file (multipart). For event cover image.
+ * @param {string} path - e.g. '/api/upload/event-cover'
+ * @param {File} file - File from input[type=file]
+ * @returns {Promise<{ url: string }>}
+ */
+async function uploadFile(path, file) {
+  var token = null;
+  if (window.Auth && typeof window.Auth.getIdToken === 'function') {
+    token = await window.Auth.getIdToken();
+  }
+  if (!token) throw new Error('Authentication required');
+  var url = API_BASE_URL + path;
+  var form = new FormData();
+  form.append('file', file);
+  var res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token },
+    body: form
+  });
+  var data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Error al subir');
+  return data;
+}
+
 // ===== CACHE MANAGEMENT =====
 
 /**
@@ -269,6 +294,7 @@ if (typeof module !== 'undefined' && module.exports) {
     post,
     put,
     del,
+    uploadFile,
     clearCache,
     clearCacheEntry,
     setErrorHandler,

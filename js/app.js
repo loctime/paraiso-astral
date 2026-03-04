@@ -298,8 +298,11 @@ async function renderHome(prependEvents) {
     </div>` : ''}
 
     ${featured ? `
-    <div class="hero fade-in" onclick="navigate('event-detail', '${featured.id}')">
-      <div class="hero-placeholder star-bg">${window.ApiClient.sanitizeHTML(featured.coverImage || '🌌')}</div>
+    <div class="hero hero-collapsed fade-in" id="hero-featured" data-event-id="${featured.id}" onclick="toggleHeroExpand(event, '${featured.id}')">
+      <div class="hero-media-wrap">
+        ${(featured.coverImage && featured.coverImage.startsWith && featured.coverImage.startsWith('http')) ? '<img class="hero-img" src="' + window.ApiClient.sanitizeHTML(featured.coverImage) + '" alt="">' : '<div class="hero-placeholder star-bg">🌌</div>'}
+        <span class="hero-toggle-label">Toca para expandir / contraer</span>
+      </div>
       <div class="hero-overlay"></div>
       <div class="hero-content">
         <span class="badge badge-primary" style="margin-bottom:0.5rem">Evento Destacado</span>
@@ -352,11 +355,26 @@ async function renderHome(prependEvents) {
   }
 }
 
+function isImageUrl(url) {
+  return typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'));
+}
+function toggleHeroExpand(ev, eventId) {
+  if (ev.target.closest && ev.target.closest('.hero-content')) {
+    navigate('event-detail', eventId);
+    return;
+  }
+  var hero = document.getElementById('hero-featured');
+  if (hero) hero.classList.toggle('hero-collapsed');
+}
+
 function renderEventCardMini(e) {
   var safeId = (e.id || '').replace(/'/g, "\\'");
+  var imgBlock = isImageUrl(e.coverImage)
+    ? '<img class="event-card-img" src="' + e.coverImage.replace(/"/g, '&quot;') + '" alt="">'
+    : '<div class="event-img-placeholder star-bg">🌌</div>';
   return `
     <div class="event-card" onclick="navigate('event-detail', '${safeId}')">
-      <div class="event-img-placeholder star-bg">${e.coverImage || '🌌'}</div>
+      <div class="event-card-img-wrap">${imgBlock}</div>
       <div class="event-body">
         <div class="event-meta">
           <div><div class="event-name">${e.title}</div><div class="event-venue">${e.venue}</div></div>
@@ -516,9 +534,12 @@ function renderEventCardFull(e) {
   const isLive = e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date());
   const revenue = 0; // No ticket data available in new schema
   const safeId = (e.id || '').replace(/'/g, "\\'");
+  var imgBlock = isImageUrl(e.coverImage)
+    ? '<img class="event-card-img" src="' + (e.coverImage || '').replace(/"/g, '&quot;') + '" alt="" style="height:160px;object-fit:cover;width:100%">'
+    : '<div class="event-img-placeholder star-bg" style="height:160px">🌌</div>';
   return `
     <div class="event-card" onclick="navigate('event-detail', '${safeId}')">
-      <div class="event-img-placeholder star-bg" style="height:160px">${e.coverImage || '🌌'}</div>
+      <div class="event-card-img-wrap" style="height:160px">${imgBlock}</div>
       <div class="event-body">
         <div class="event-meta">
           <div>
@@ -553,11 +574,15 @@ async function renderEventDetail(eventId) {
   `;
   
   try {
-    // Fetch event from backend (público)
-    const response = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
-    const events = response.data || [];
-    const e = events.find(event => event.id === eventId);
-    
+    var e = null;
+    try {
+      e = await window.ApiClient.get('/api/events/' + eventId + '?_=' + Date.now(), { skipAuth: true });
+    } catch (err) {
+      // Si el detalle por ID falla (ej. evento privado), intentar desde el listado
+      var response = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
+      var events = response.data || [];
+      e = events.find(function (ev) { return ev.id === eventId; });
+    }
     if (!e) {
       content.innerHTML = `
         <button onclick="navigate('events')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
@@ -573,15 +598,20 @@ async function renderEventDetail(eventId) {
     const sold = 0; // No ticket data available in new schema
     const pct = 0; // No capacity data available in new schema
 
+    var coverBlock = isImageUrl(e.coverImage)
+      ? '<img src="' + e.coverImage.replace(/"/g, '&quot;') + '" alt="" style="width:100%;height:220px;object-fit:cover;display:block">'
+      : '<div style="width:100%;height:220px;display:flex;align-items:center;justify-content:center;font-size:6rem">🌌</div>';
+    var editImageBtn = '<button type="button" class="btn btn-ghost" style="margin-top:0.5rem;font-size:0.8rem" onclick="editEventCover(\'' + e.id + '\')">📷 Editar imagen</button>';
     content.innerHTML = `
     <button onclick="navigate('events')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
     <div style="border-radius:var(--radius-xl);overflow:hidden;border:1px solid var(--border);margin-bottom:1.2rem">
-      <div style="height:220px;background:linear-gradient(135deg,#1a0820,#3d0055,#1a0820);display:flex;align-items:center;justify-content:center;font-size:6rem;position:relative">
-        ${e.coverImage || '🌌'}
+      <div style="height:220px;background:linear-gradient(135deg,#1a0820,#3d0055,#1a0820);position:relative;overflow:hidden">
+        ${coverBlock}
         ${e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date()) ? '<span class="badge badge-live" style="position:absolute;top:1rem;left:1rem">🔴 LIVE</span>' : '<span class="badge badge-primary" style="position:absolute;top:1rem;left:1rem">'+new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })+'</span>'}
       </div>
       <div style="padding:1.2rem">
-        <h2 style="font-size:1.5rem;font-weight:900;margin-bottom:0.3rem">${e.title}</h2>
+        ${editImageBtn}
+        <h2 style="font-size:1.5rem;font-weight:900;margin-bottom:0.3rem;margin-top:0.5rem">${e.title}</h2>
         <div style="color:var(--primary);font-weight:600;margin-bottom:0.5rem">📍 ${e.venue || 'Venue'}</div>
         <div style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem">🕐 ${new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
         <p style="font-size:0.9rem;line-height:1.6;color:rgba(240,230,255,0.8)">${e.description || 'Una experiencia cósmica única te espera.'}</p>
@@ -622,7 +652,7 @@ async function renderEventDetail(eventId) {
     <div style="display:flex;gap:1rem;margin-top:2rem">
       <button class="btn btn-primary" style="flex:1" onclick="navigate('tickets','${e.id}')">🎫 Comprar Entradas</button>
       <button class="btn btn-outline" onclick="navigate('events')">← Ver Todos</button>
-    </div>}
+    </div>
 
     <div style="margin-top:1.5rem">
       <button class="btn btn-primary btn-full" onclick="navigate('tickets','${e.id}')">🎫 Comprar Entradas</button>
@@ -641,6 +671,29 @@ async function renderEventDetail(eventId) {
       </div>
     `;
   }
+}
+
+function editEventCover(eventId) {
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/jpeg,image/png,image/webp,image/gif';
+  input.style.display = 'none';
+  document.body.appendChild(input);
+  input.onchange = function () {
+    var file = input.files && input.files[0];
+    if (!file) return;
+    input.remove();
+    toast('Subiendo imagen…');
+    window.ApiClient.uploadFile('/api/upload/event-cover', file).then(function (r) {
+      return window.ApiClient.request('/api/events/' + eventId, { method: 'PATCH', body: { coverImage: r.url } });
+    }).then(function () {
+      toast('Imagen actualizada.');
+      renderEventDetail(eventId);
+    }).catch(function (err) {
+      toast('❌ ' + (err.message || 'Error al actualizar'));
+    });
+  };
+  input.click();
 }
 
 function shareEvent(id) {
@@ -1190,6 +1243,7 @@ function renderAddEventModal() {
       <input class="input" type="text" placeholder="22:00 - 06:00" id="ev-time" />
     </div>
     <div class="form-group"><label>Lineup (separado por comas)</label><input class="input" type="text" placeholder="DJ1, DJ2, DJ3" id="ev-lineup" /></div>
+    <div class="form-group"><label>Imagen de portada</label><input class="input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" id="ev-cover" /><div id="ev-cover-preview" style="margin-top:0.5rem;min-height:0"></div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;margin-bottom:1rem">
       <div class="form-group" style="margin-bottom:0"><label>General $</label><input class="input" type="number" placeholder="45" id="ev-gen" /></div>
       <div class="form-group" style="margin-bottom:0"><label>VIP $</label><input class="input" type="number" placeholder="120" id="ev-vip" /></div>
@@ -1204,6 +1258,23 @@ function renderAddEventModal() {
       if (input) input.value = this.getAttribute('data-time');
     });
   });
+  var coverInput = document.getElementById('ev-cover');
+  if (coverInput) {
+    coverInput.addEventListener('change', function () {
+      var file = this.files && this.files[0];
+      var preview = document.getElementById('ev-cover-preview');
+      if (!preview) return;
+      preview.innerHTML = '';
+      if (!file) return;
+      preview.innerHTML = '<span style="color:var(--text-muted);font-size:0.85rem">Subiendo…</span>';
+      window.ApiClient.uploadFile('/api/upload/event-cover', file).then(function (r) {
+        preview.innerHTML = '<img src="' + r.url + '" alt="" style="max-width:100%;max-height:120px;border-radius:var(--radius);border:1px solid var(--border)">';
+        preview.setAttribute('data-cover-url', r.url);
+      }).catch(function (err) {
+        preview.innerHTML = '<span style="color:var(--red, #f44);font-size:0.85rem">' + (err.message || 'Error al subir') + '</span>';
+      });
+    });
+  }
 }
 
 async function addEvent() {
@@ -1223,8 +1294,10 @@ async function addEvent() {
   var startAt = date + 'T' + timePart + ':00';
 
   var description = (lineupEl && lineupEl.value.trim()) || '';
+  var previewEl = document.getElementById('ev-cover-preview');
+  var coverImage = (previewEl && previewEl.getAttribute('data-cover-url')) || undefined;
 
-  var payload = { title: title, venue: venue, startAt: startAt, description: description || undefined };
+  var payload = { title: title, venue: venue, startAt: startAt, description: description || undefined, coverImage: coverImage };
   console.log('[addEvent] POST /api/events payload:', payload);
   closeModal('modal-add-event');
   try {
