@@ -1,9 +1,21 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../../config/prisma';
 import { EventPublic, EventsQueryParams, EventsResponse } from '../../types/eventPublic';
-import { EventStatus, EventVisibility } from '@prisma/client';
+import { EventStatus, EventVisibility, MembershipRole } from '@prisma/client';
 import { createBadRequestError } from '../../utils/errors';
 import type { Prisma } from '@prisma/client';
+
+/** Genera slug único a partir del título */
+function slugify(title: string): string {
+  const base = title
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
+  return base ? `${base}-${Date.now().toString(36)}` : `event-${Date.now()}`;
+}
 
 /**
  * Validate and sanitize query parameters for public endpoint
@@ -178,6 +190,103 @@ export const getEventById = async (req: Request, res: Response, next: NextFuncti
     };
 
     res.json(eventPublic);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/events
+ * Crear evento. Requiere auth y que el usuario sea ADMIN u OWNER en al menos una organización.
+ */
+export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user;
+    if (!user?.id) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    const membership = await prisma.membership.findFirst({
+      where: {
+        userId: user.id,
+        role: { in: [MembershipRole.ADMIN, MembershipRole.OWNER] },
+      },
+      include: { organization: true },
+    });
+    if (!membership) {
+      res.status(403).json({
+        error: 'No tienes permiso para crear eventos. Se requiere rol ADMIN u OWNER en una organización.',
+      });
+      return;
+    }
+
+    const body = req.body as {
+      title?: string;
+      venue?: string;
+      startAt?: string;
+      endAt?: string;
+      description?: string;
+    };
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
+    const venue = typeof body.venue === 'string' ? body.venue.trim() : '';
+    const startAtRaw = body.startAt;
+
+    if (!title || !venue) {
+      throw createBadRequestError('title y venue son obligatorios');
+    }
+    let startAt: Date;
+    try {
+      startAt = startAtRaw ? new Date(startAtRaw) : new Date();
+      if (Number.isNaN(startAt.getTime())) throw new Error('Invalid date');
+    } catch {
+      throw createBadRequestError('startAt debe ser una fecha válida (ISO 8601)');
+    }
+
+    const description = typeof body.description === 'string' ? body.description.trim() : '';
+    const endAtRaw = body.endAt;
+    let endAt: Date | null = null;
+    if (endAtRaw) {
+      try {
+        endAt = new Date(endAtRaw);
+        if (Number.isNaN(endAt.getTime())) endAt = null;
+      } catch {
+        endAt = null;
+      }
+    }
+
+    const slug = slugify(title);
+    const event = await prisma.event.create({
+      data: {
+        organizationId: membership.organizationId,
+        title,
+        slug,
+        description: description || title,
+        startAt,
+        endAt,
+        venue,
+        status: EventStatus.DRAFT,
+        visibility: EventVisibility.PUBLIC,
+      },
+      include: {
+        organization: { select: { id: true, name: true } },
+      },
+    });
+
+    const eventPublic: EventPublic = {
+      id: event.id,
+      title: event.title,
+      slug: event.slug,
+      description: event.description,
+      coverImage: event.coverImage,
+      startAt: event.startAt,
+      endAt: event.endAt,
+      venue: event.venue,
+      city: event.city,
+      status: event.status,
+      organization: event.organization,
+    };
+    res.status(201).json(eventPublic);
   } catch (error) {
     next(error);
   }

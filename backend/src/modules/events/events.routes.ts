@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { getEvents, getEventById } from './events.controller';
-import { optionalAuth } from '../../middlewares/requireAuth';
+import { getEvents, getEventById, createEvent } from './events.controller';
+import { optionalAuth, requireAuth } from '../../middlewares/requireAuth';
 import { requireEventAccess } from '../../middlewares/requireEventAccess';
 
 const router: Router = Router();
@@ -10,6 +10,12 @@ const router: Router = Router();
  * Listado público: solo eventos con visibility PUBLIC.
  */
 router.get('/', getEvents);
+
+/**
+ * POST /api/events
+ * Crear evento. Requiere autenticación y rol ADMIN u OWNER en una organización.
+ */
+router.post('/', requireAuth, createEvent);
 
 /**
  * GET /api/events/:eventId

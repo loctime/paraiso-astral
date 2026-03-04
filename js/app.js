@@ -129,19 +129,24 @@ function showLoading(container, message = 'Cargando...') {
  * Show error state for a container
  * @param {HTMLElement} container - Container element
  * @param {string} message - Error message
- * @param {Function} retryCallback - Optional retry callback
+ * @param {string|Function} retryCallback - Optional retry callback name or function
+ * @param {{ label: string, onclick: string }} actionButton - Optional extra button (e.g. "Nuevo Evento")
  */
-function showErrorState(container, message, retryCallback = null) {
+function showErrorState(container, message, retryCallback = null, actionButton = null) {
   if (!container) return;
   
   const retryButton = retryCallback ? 
     `<button class="btn btn-primary" style="margin-top:1.5rem" onclick="(${retryCallback})()">🔄 Reintentar</button>` : '';
+  const extraButton = actionButton ?
+    `<button class="btn btn-primary" style="margin-top:1rem;margin-left:0.5rem" onclick="${actionButton.onclick}">${actionButton.label}</button>` : '';
+  const buttonsWrap = (retryButton || extraButton) ?
+    `<div style="display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:center;margin-top:1.5rem">${retryButton}${extraButton}</div>` : '';
   
   container.innerHTML = `
     <div class="empty-state">
       <div class="empty-icon">⚠️</div>
       <div class="empty-title">${message}</div>
-      ${retryButton}
+      ${buttonsWrap}
     </div>
   `;
 }
@@ -259,7 +264,10 @@ async function renderHome() {
     const events = response.data || [];
     
     if (!events || events.length === 0) {
-      showErrorState(content, 'No hay eventos disponibles');
+      showErrorState(content, 'No hay eventos disponibles', null, {
+        label: '➕ Nuevo Evento',
+        onclick: "openModal('modal-add-event')"
+      });
       return;
     }
     
@@ -1169,17 +1177,40 @@ function renderAddEventModal() {
   `;
 }
 
-function addEvent() {
+async function addEvent() {
   var titleEl = document.getElementById('ev-title');
   var venueEl = document.getElementById('ev-venue');
   var dateEl = document.getElementById('ev-date');
+  var timeEl = document.getElementById('ev-time');
+  var lineupEl = document.getElementById('ev-lineup');
   var title = titleEl ? titleEl.value.trim() : '';
   var venue = venueEl ? venueEl.value.trim() : '';
   var date = dateEl ? dateEl.value : '';
-  if (!title || !venue || !date) { toast('⚠️ Completa los campos requeridos'); return; }
+  if (!title || !venue || !date) { toast('⚠️ Completa nombre, lugar y fecha'); return; }
+
+  var timeStr = (timeEl && timeEl.value.trim()) || '20:00';
+  var timePart = (timeStr.split(/\s+-\s+/)[0] || timeStr.split(/\s+/)[0] || '20:00').trim();
+  if (!/^\d{1,2}:\d{2}/.test(timePart)) timePart += ':00';
+  var startAt = date + 'T' + timePart + ':00';
+
+  var description = (lineupEl && lineupEl.value.trim()) || '';
+
   closeModal('modal-add-event');
-  toast('🎉 Creación de evento próximamente vía backend.');
-  renderEvents();
+  try {
+    await window.ApiClient.post('/api/events', {
+      title: title,
+      venue: venue,
+      startAt: startAt,
+      description: description || undefined
+    });
+    toast('🎉 Evento creado correctamente.');
+    renderHome();
+    renderEvents();
+    var adminContent = document.querySelector('#page-admin .page-content');
+    if (adminContent) renderAdmin();
+  } catch (err) {
+    toast('❌ ' + (err && err.message ? err.message : 'Error al crear el evento'));
+  }
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────

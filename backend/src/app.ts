@@ -152,6 +152,9 @@ const notFoundHandler = (req: Request, res: Response, next: NextFunction) => {
 export const createApp = (): Application => {
   const app: Application = express();
 
+  // Trust proxy (Render, Nginx, etc.) so X-Forwarded-For is used and rate-limit works
+  app.set('trust proxy', 1);
+
   // Security middleware
   app.use(helmet({
     contentSecurityPolicy: false, // Disabled for now to avoid breaking frontend
