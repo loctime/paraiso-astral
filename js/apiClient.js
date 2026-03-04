@@ -124,8 +124,9 @@ async function request(path, options = {}) {
 
     // Handle 403 Forbidden
     if (response.status === 403) {
-      showError('Acceso denegado: No tienes los permisos necesarios', 'error');
-      throw new Error('Access denied');
+      const msg = data.error || data.message || 'No tienes los permisos necesarios';
+      showError(msg, 'error');
+      throw new Error(msg);
     }
 
     // Handle 404 (ej. usuario no en BD: "User not found in database")

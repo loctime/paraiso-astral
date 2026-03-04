@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../../config/prisma';
 import { EventPublic, EventsQueryParams, EventsResponse } from '../../types/eventPublic';
-import { EventStatus, EventVisibility, MembershipRole } from '@prisma/client';
+import { EventStatus, EventVisibility, MembershipRole, UserRole } from '@prisma/client';
 import { createBadRequestError } from '../../utils/errors';
 import type { Prisma } from '@prisma/client';
 
@@ -82,6 +82,7 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
   try {
     const validatedParams = validateQueryParams(req.query as EventsQueryParams);
     const now = new Date();
+    console.log('[GET /api/events] query:', req.query, '→ validated:', { status: validatedParams.status, page: validatedParams.page, limit: validatedParams.limit, upcoming: validatedParams.upcoming, organizationId: validatedParams.organizationId });
 
     // Listado público: solo eventos PUBLIC (Access Engine). PRIVATE no se listan aquí.
     const where: Prisma.EventWhereInput = {
@@ -150,6 +151,7 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
       },
     };
 
+    console.log('[GET /api/events] total:', total, 'returned:', eventsPublic.length, 'ids:', eventsPublic.map(e => e.id));
     res.json(response);
 
   } catch (error) {
@@ -202,11 +204,13 @@ export const getEventById = async (req: Request, res: Response, next: NextFuncti
 export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user;
+    console.log('[POST /api/events] body:', req.body, 'user:', user?.id ? { id: user.id, role: user.role } : 'none');
     if (!user?.id) {
       res.status(401).json({ error: 'Authentication required' });
       return;
     }
 
+    let organizationId: string;
     const membership = await prisma.membership.findFirst({
       where: {
         userId: user.id,
@@ -214,9 +218,24 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       },
       include: { organization: true },
     });
-    if (!membership) {
+    if (membership) {
+      organizationId = membership.organizationId;
+    } else if (user.role === UserRole.ADMIN) {
+      // Admin global sin membership: usar la primera organización (ej. tras bootstrap-admin)
+      const firstOrg = await prisma.organization.findFirst({
+        where: { status: 'active' },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (!firstOrg) {
+        res.status(403).json({
+          error: 'No hay ninguna organización en el sistema. Crea una organización o asigna tu usuario a una con rol ADMIN/OWNER.',
+        });
+        return;
+      }
+      organizationId = firstOrg.id;
+    } else {
       res.status(403).json({
-        error: 'No tienes permiso para crear eventos. Se requiere rol ADMIN u OWNER en una organización.',
+        error: 'No tienes permiso para crear eventos. Se requiere rol ADMIN u OWNER en una organización, o ser administrador global.',
       });
       return;
     }
@@ -258,14 +277,14 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
     const slug = slugify(title);
     const event = await prisma.event.create({
       data: {
-        organizationId: membership.organizationId,
+        organizationId,
         title,
         slug,
         description: description || title,
         startAt,
         endAt,
         venue,
-        status: EventStatus.DRAFT,
+        status: EventStatus.PUBLISHED,
         visibility: EventVisibility.PUBLIC,
       },
       include: {
@@ -286,8 +305,10 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       status: event.status,
       organization: event.organization,
     };
+    console.log('[POST /api/events] created:', { id: event.id, title: event.title, startAt: event.startAt, status: event.status });
     res.status(201).json(eventPublic);
   } catch (error) {
+    console.error('[POST /api/events] error:', error);
     next(error);
   }
 };

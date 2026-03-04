@@ -260,9 +260,9 @@ async function renderHome() {
   
   try {
     // Fetch events from backend (público, sin login)
-    const response = await window.ApiClient.get('/api/events', { skipAuth: true });
+    const response = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
     const events = response.data || [];
-    
+    console.log('[renderHome] GET /api/events →', events.length, 'events', events.length ? events.map(function (e) { return { id: e.id, title: e.title, startAt: e.startAt }; }) : []);
     if (!events || events.length === 0) {
       showErrorState(content, 'No hay eventos disponibles', null, {
         label: '➕ Nuevo Evento',
@@ -348,8 +348,9 @@ async function renderHome() {
 }
 
 function renderEventCardMini(e) {
+  var safeId = (e.id || '').replace(/'/g, "\\'");
   return `
-    <div class="event-card" onclick="navigate('event-detail', ${e.id})">
+    <div class="event-card" onclick="navigate('event-detail', '${safeId}')">
       <div class="event-img-placeholder star-bg">${e.coverImage || '🌌'}</div>
       <div class="event-body">
         <div class="event-meta">
@@ -389,9 +390,9 @@ async function renderEvents(filter = 'upcoming') {
   
   try {
     // Fetch events from backend (público, sin login)
-    const response = await window.ApiClient.get('/api/events', { skipAuth: true });
+    const response = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
     const events = response.data || [];
-    
+    console.log('[renderEvents] GET /api/events filter=', filter, '→', events.length, 'events');
     if (!events || events.length === 0) {
       document.getElementById('events-list').innerHTML = '<div class="empty-state"><div class="empty-icon">🌌</div><div class="empty-title">Sin eventos</div></div>';
       return;
@@ -403,6 +404,7 @@ async function renderEvents(filter = 'upcoming') {
       if (filter === 'live') return e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date());
       return e.status === 'PUBLISHED' && new Date(e.startAt) > new Date();
     });
+    console.log('[renderEvents] filtered →', filteredEvents.length, 'for', filter);
 
     document.getElementById('events-list').innerHTML = filteredEvents.length === 0 ? 
       '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos</div></div>' :
@@ -502,8 +504,9 @@ async function testRBAC() {
 function renderEventCardFull(e) {
   const isLive = e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date());
   const revenue = 0; // No ticket data available in new schema
+  const safeId = (e.id || '').replace(/'/g, "\\'");
   return `
-    <div class="event-card" onclick="navigate('event-detail', ${e.id})">
+    <div class="event-card" onclick="navigate('event-detail', '${safeId}')">
       <div class="event-img-placeholder star-bg" style="height:160px">${e.coverImage || '🌌'}</div>
       <div class="event-body">
         <div class="event-meta">
@@ -517,8 +520,8 @@ function renderEventCardFull(e) {
         <div class="event-lineup" style="margin-top:0.5rem">🕐 ${new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
         <div class="event-lineup">📍 ${e.city || e.venue}</div>
         <div style="display:flex;gap:0.5rem;margin-top:0.75rem">
-          <button class="btn btn-primary" style="flex:1;padding:0.6rem;font-size:0.78rem" onclick="event.stopPropagation();navigate('tickets',${e.id})">🎫 Comprar</button>
-          <button class="btn btn-outline" style="padding:0.6rem 0.8rem;font-size:0.78rem" onclick="event.stopPropagation();navigate('event-detail',${e.id})">Ver más</button>
+          <button class="btn btn-primary" style="flex:1;padding:0.6rem;font-size:0.78rem" onclick="event.stopPropagation();navigate('tickets','${safeId}')">🎫 Comprar</button>
+          <button class="btn btn-outline" style="padding:0.6rem 0.8rem;font-size:0.78rem" onclick="event.stopPropagation();navigate('event-detail', '${safeId}')">Ver más</button>
         </div>
       </div>
     </div>`;
@@ -540,7 +543,7 @@ async function renderEventDetail(eventId) {
   
   try {
     // Fetch event from backend (público)
-    const response = await window.ApiClient.get('/api/events', { skipAuth: true });
+    const response = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
     const events = response.data || [];
     const e = events.find(event => event.id === eventId);
     
@@ -761,7 +764,7 @@ async function renderTicketsPage(eventId) {
   content.innerHTML = '<div style="text-align:center;padding:2rem"><div style="font-size:2rem">🔄</div><div style="margin-top:1rem;color:var(--text-muted)">Cargando...</div></div>';
 
   try {
-    var res = await window.ApiClient.get('/api/events', { skipAuth: true });
+    var res = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
     var events = res.data || [];
     var e = events.find(function (x) { return String(x.id) === String(eventId); }) || events[0];
     if (!e) {
@@ -950,7 +953,7 @@ async function renderAdmin() {
     }
 
     // Get events for admin stats (público)
-    const eventsResponse = await window.ApiClient.get('/api/events', { skipAuth: true });
+    const eventsResponse = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
     const events = eventsResponse.data || [];
     
     // Calculate stats from real data
@@ -1165,7 +1168,16 @@ function renderAddEventModal() {
     <div class="form-group"><label>Nombre del evento</label><input class="input" type="text" placeholder="Ej: Cosmic Rave Vol. 3" id="ev-title" /></div>
     <div class="form-group"><label>Venue / Lugar</label><input class="input" type="text" placeholder="Nombre del lugar" id="ev-venue" /></div>
     <div class="form-group"><label>Fecha</label><input class="input" type="date" id="ev-date" /></div>
-    <div class="form-group"><label>Horario</label><input class="input" type="text" placeholder="22:00 - 06:00" id="ev-time" /></div>
+    <div class="form-group"><label>Horario</label>
+      <div class="horario-buttons" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem">
+        <button type="button" class="btn btn-ghost btn-sm ev-time-btn" data-time="20:00">20:00</button>
+        <button type="button" class="btn btn-ghost btn-sm ev-time-btn" data-time="21:00">21:00</button>
+        <button type="button" class="btn btn-ghost btn-sm ev-time-btn" data-time="22:00">22:00</button>
+        <button type="button" class="btn btn-ghost btn-sm ev-time-btn" data-time="23:00">23:00</button>
+        <button type="button" class="btn btn-ghost btn-sm ev-time-btn" data-time="00:00">00:00</button>
+      </div>
+      <input class="input" type="text" placeholder="22:00 - 06:00" id="ev-time" />
+    </div>
     <div class="form-group"><label>Lineup (separado por comas)</label><input class="input" type="text" placeholder="DJ1, DJ2, DJ3" id="ev-lineup" /></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;margin-bottom:1rem">
       <div class="form-group" style="margin-bottom:0"><label>General $</label><input class="input" type="number" placeholder="45" id="ev-gen" /></div>
@@ -1175,6 +1187,12 @@ function renderAddEventModal() {
     <button class="btn btn-primary btn-full" onclick="addEvent()">✅ Crear Evento</button>
     <button class="btn btn-ghost btn-full" style="margin-top:0.5rem" onclick="closeModal('modal-add-event')">Cancelar</button>
   `;
+  modal.querySelectorAll('.ev-time-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var input = document.getElementById('ev-time');
+      if (input) input.value = this.getAttribute('data-time');
+    });
+  });
 }
 
 async function addEvent() {
@@ -1195,20 +1213,19 @@ async function addEvent() {
 
   var description = (lineupEl && lineupEl.value.trim()) || '';
 
+  var payload = { title: title, venue: venue, startAt: startAt, description: description || undefined };
+  console.log('[addEvent] POST /api/events payload:', payload);
   closeModal('modal-add-event');
   try {
-    await window.ApiClient.post('/api/events', {
-      title: title,
-      venue: venue,
-      startAt: startAt,
-      description: description || undefined
-    });
+    var res = await window.ApiClient.post('/api/events', payload);
+    console.log('[addEvent] POST /api/events success:', res);
     toast('🎉 Evento creado correctamente.');
     renderHome();
     renderEvents();
     var adminContent = document.querySelector('#page-admin .page-content');
     if (adminContent) renderAdmin();
   } catch (err) {
+    console.error('[addEvent] POST /api/events error:', err);
     toast('❌ ' + (err && err.message ? err.message : 'Error al crear el evento'));
   }
 }

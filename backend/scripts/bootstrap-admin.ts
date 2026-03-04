@@ -4,7 +4,7 @@ import path from 'path';
 // Cargar .env del backend (desde backend/.env)
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
-import { PrismaClient, UserRole, UserStatus } from '@prisma/client';
+import { PrismaClient, UserRole, UserStatus, MembershipRole } from '@prisma/client';
 import { auth } from '../src/config/firebase';
 
 const prisma = new PrismaClient();
@@ -42,6 +42,34 @@ async function main() {
     })
 
     console.log(`Usuario ADMIN creado para ${email}`)
+  }
+
+  // Asegurar que exista una organización y el admin sea OWNER (para poder crear eventos)
+  const org = await prisma.organization.upsert({
+    where: { slug: 'astral-events' },
+    update: {},
+    create: {
+      name: 'Astral Events',
+      slug: 'astral-events',
+      timezone: 'America/Argentina/Salta',
+      currency: 'ARS',
+      status: 'active',
+    },
+  })
+  const user = await prisma.user.findUnique({ where: { email } })
+  if (user) {
+    await prisma.membership.upsert({
+      where: {
+        userId_organizationId: { userId: user.id, organizationId: org.id },
+      },
+      update: { role: MembershipRole.OWNER },
+      create: {
+        userId: user.id,
+        organizationId: org.id,
+        role: MembershipRole.OWNER,
+      },
+    })
+    console.log(`Organización "${org.name}" vinculada: ${email} es OWNER`)
   }
 
   // Crear o actualizar usuario en Firebase Auth (para poder hacer login)
