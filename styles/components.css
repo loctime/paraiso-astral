@@ -376,9 +376,13 @@ label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bo
   50% { opacity: 0.45; }
 }
 
-/* Page de detalle: gradiente más bajo y ancho, tinte suave en la mitad superior */
+/* Page de detalle: fondo por defecto (un solo color) */
 #page-event-detail.event-detail-page--themed {
   --event-detail-dominant: 209, 37, 244;
+  --event-color-top: var(--event-detail-dominant);
+  --event-color-bottom: var(--event-detail-dominant);
+  --event-color-left: var(--event-detail-dominant);
+  --event-color-right: var(--event-detail-dominant);
   background:
     radial-gradient(
       ellipse 120% 100% at 50% 20%,
@@ -388,6 +392,36 @@ label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bo
     ),
     var(--bg-dark);
   min-height: 100%;
+}
+
+/* Iluminación ambiental desde 4 direcciones (cuando hay imagen y colores regionales) */
+#page-event-detail.event-detail-page--themed.event-detail-page--regional {
+  background:
+    radial-gradient(
+      circle at 50% 0%,
+      rgba(var(--event-color-top), 0.22) 0%,
+      rgba(var(--event-color-top), 0.06) 45%,
+      transparent 70%
+    ),
+    radial-gradient(
+      circle at 50% 100%,
+      rgba(var(--event-color-bottom), 0.2) 0%,
+      rgba(var(--event-color-bottom), 0.05) 50%,
+      transparent 70%
+    ),
+    radial-gradient(
+      circle at 0% 50%,
+      rgba(var(--event-color-left), 0.16) 0%,
+      rgba(var(--event-color-left), 0.04) 45%,
+      transparent 65%
+    ),
+    radial-gradient(
+      circle at 100% 50%,
+      rgba(var(--event-color-right), 0.16) 0%,
+      rgba(var(--event-color-right), 0.04) 45%,
+      transparent 65%
+    ),
+    var(--bg-dark);
 }
 #page-event-detail.event-detail-page--themed .page-content {
   background: transparent;

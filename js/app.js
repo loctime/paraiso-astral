@@ -617,12 +617,30 @@ function renderEventCardFull(e) {
     </div>`;
 }
 
-// ── EVENT DETAIL (dominant color glow) ────────────────────────────────────────
-var EVENT_DETAIL_DEFAULT_GLOW = '209, 37, 244'; // theme primary RGB for fallback
+// ── EVENT DETAIL (dominant + regional colors) ──────────────────────────────────
+var EVENT_DETAIL_DEFAULT_GLOW = '209, 37, 244';
+
+/** Helper: from RGBA data and index, return "r,g,b" skipping dark pixels; optional bestS ref for vibrant. */
+function sampleRegionColor(data, indices, outBest) {
+  var r = 0, g = 0, b = 0, count = 0, bestS = 0, bestR = 0, bestG = 0, bestB = 0;
+  for (var k = 0; k < indices.length; k++) {
+    var i = indices[k];
+    var pr = data[i], pg = data[i + 1], pb = data[i + 2];
+    if (pr + pg + pb < 120) continue;
+    var max = Math.max(pr, pg, pb), min = Math.min(pr, pg, pb);
+    if ((max + min) / 2 / 255 > 0.92) continue;
+    r += pr; g += pg; b += pb; count++;
+    var l = (max + min) / 2 / 255;
+    var s = max === min ? 0 : (max - min) / (l < 0.5 ? max + min : 2 - max - min);
+    if (s > bestS) { bestS = s; bestR = pr; bestG = pg; bestB = pb; }
+  }
+  if (count === 0) return null;
+  if (outBest && bestS >= 0.1) return Math.round(bestR) + ', ' + Math.round(bestG) + ', ' + Math.round(bestB);
+  return Math.round(r / count) + ', ' + Math.round(g / count) + ', ' + Math.round(b / count);
+}
 
 /**
- * Extract a dominant/vibrant color from an image via canvas. Returns "r,g,b" or null.
- * Skips very dark pixels (r+g+b < 120) so the glow stays visible. Runs once per image load.
+ * Extract one dominant color (full image) for the hero glow. Uses 48×48 canvas. Returns "r,g,b" or null.
  */
 function getDominantColorFromImage(img) {
   try {
@@ -635,35 +653,66 @@ function getDominantColorFromImage(img) {
     if (!ctx) return null;
     ctx.drawImage(img, 0, 0, size, size);
     var data = ctx.getImageData(0, 0, size, size).data;
-    var r = 0, g = 0, b = 0, count = 0;
-    var bestS = 0, bestR = 0, bestG = 0, bestB = 0;
-    for (var i = 0; i < data.length; i += 4) {
-      var pr = data[i], pg = data[i + 1], pb = data[i + 2];
-      var sum = pr + pg + pb;
-      if (sum < 120) continue;
-      var max = Math.max(pr, pg, pb), min = Math.min(pr, pg, pb);
-      var l = (max + min) / 2 / 255;
-      if (l > 0.92) continue;
-      r += pr; g += pg; b += pb; count++;
-      var s = max === min ? 0 : (max - min) / (l < 0.5 ? max + min : 2 - max - min);
-      if (s > bestS) { bestS = s; bestR = pr; bestG = pg; bestB = pb; }
-    }
-    if (count > 0 && bestS < 0.1) {
-      return Math.round(r / count) + ', ' + Math.round(g / count) + ', ' + Math.round(b / count);
-    }
-    if (bestS >= 0.1) return Math.round(bestR) + ', ' + Math.round(bestG) + ', ' + Math.round(bestB);
-    if (count > 0) return Math.round(r / count) + ', ' + Math.round(g / count) + ', ' + Math.round(b / count);
-    return null;
+    var indices = [];
+    for (var i = 0; i < data.length; i += 4) indices.push(i);
+    return sampleRegionColor(data, indices, true);
   } catch (err) {
     return null;
   }
 }
 
-function applyEventDetailGlow(content, rgbString) {
+/**
+ * Extract colors from 4 regions (top, bottom, left, right) for directional page gradient.
+ * Single 64×64 canvas pass. Returns { top, bottom, left, right } as "r,g,b" or fallback.
+ */
+function getRegionalColorsFromImage(img) {
+  var fallback = EVENT_DETAIL_DEFAULT_GLOW;
+  try {
+    if (!img || !img.complete || img.naturalWidth === 0) {
+      return { top: fallback, bottom: fallback, left: fallback, right: fallback };
+    }
+    var w = 64, h = 64;
+    var canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return { top: fallback, bottom: fallback, left: fallback, right: fallback };
+    ctx.drawImage(img, 0, 0, w, h);
+    var data = ctx.getImageData(0, 0, w, h).data;
+    var topIdx = [], bottomIdx = [], leftIdx = [], rightIdx = [];
+    var edge = 16;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        var i = (y * w + x) * 4;
+        if (y < edge) topIdx.push(i);
+        if (y >= h - edge) bottomIdx.push(i);
+        if (x < edge) leftIdx.push(i);
+        if (x >= w - edge) rightIdx.push(i);
+      }
+    }
+    return {
+      top: sampleRegionColor(data, topIdx, true) || fallback,
+      bottom: sampleRegionColor(data, bottomIdx, true) || fallback,
+      left: sampleRegionColor(data, leftIdx, true) || fallback,
+      right: sampleRegionColor(data, rightIdx, true) || fallback
+    };
+  } catch (err) {
+    return { top: fallback, bottom: fallback, left: fallback, right: fallback };
+  }
+}
+
+function applyEventDetailGlow(content, rgbString, regional) {
   var color = rgbString || EVENT_DETAIL_DEFAULT_GLOW;
   var page = content && content.closest && content.closest('.page');
   if (page) {
     page.style.setProperty('--event-detail-dominant', color);
+    if (regional) {
+      page.style.setProperty('--event-color-top', regional.top);
+      page.style.setProperty('--event-color-bottom', regional.bottom);
+      page.style.setProperty('--event-color-left', regional.left);
+      page.style.setProperty('--event-color-right', regional.right);
+      page.classList.add('event-detail-page--regional');
+    }
     page.classList.add('event-detail-page--themed');
   }
   var wrap = content && content.querySelector('.event-detail-hero-wrap');
@@ -816,7 +865,8 @@ async function renderEventDetail(eventId) {
     if (heroImg && heroImg.tagName === 'IMG') {
       function applyGlowFromImage() {
         var rgb = getDominantColorFromImage(heroImg);
-        applyEventDetailGlow(content, rgb);
+        var regional = getRegionalColorsFromImage(heroImg);
+        applyEventDetailGlow(content, rgb, regional);
       }
       heroImg.addEventListener('load', applyGlowFromImage);
       if (heroImg.complete) applyGlowFromImage();
