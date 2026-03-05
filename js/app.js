@@ -1457,13 +1457,15 @@ function renderAddEventModal() {
   var timeVal = '20:00';
   var titleVal = '';
   var venueVal = '';
+  var descVal = '';
   var lineupVal = '';
   var coverPreviewHtml = '';
   var coverUrlAttr = '';
   if (isEdit && editing) {
     titleVal = (editing.title || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     venueVal = (editing.venue || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-    lineupVal = (editing.description || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    descVal = (editing.description || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    lineupVal = ''; // lineup no se persiste por separado en el backend
     if (editing.startAt) {
       var d = new Date(editing.startAt);
       dateVal = d.toISOString().slice(0, 10);
@@ -1495,6 +1497,7 @@ function renderAddEventModal() {
       <input class="input" type="text" placeholder="22:00 - 06:00" id="ev-time" value="${timeVal}" />
     </div>
     <div class="form-group"><label>Lineup (separado por comas)</label><input class="input" type="text" placeholder="DJ1, DJ2, DJ3" id="ev-lineup" value="${lineupVal}" /></div>
+    <div class="form-group"><label>Descripción</label><textarea class="input" id="ev-desc" rows="3" placeholder="Describe el evento, ambiente, qué esperar...">${descVal}</textarea></div>
     <div class="form-group"><label>Imagen de portada</label><input class="input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" id="ev-cover" /><div id="ev-cover-preview" style="margin-top:0.5rem;min-height:0"${coverUrlAttr}>${coverPreviewHtml}</div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;margin-bottom:1rem">
       <div class="form-group" style="margin-bottom:0"><label>General $</label><input class="input" type="number" placeholder="45" id="ev-gen" /></div>
@@ -1536,6 +1539,7 @@ async function addEvent() {
   var dateEl = document.getElementById('ev-date');
   var timeEl = document.getElementById('ev-time');
   var lineupEl = document.getElementById('ev-lineup');
+  var descEl = document.getElementById('ev-desc');
   var title = titleEl ? titleEl.value.trim() : '';
   var venue = venueEl ? venueEl.value.trim() : '';
   var date = dateEl ? dateEl.value : '';
@@ -1546,7 +1550,9 @@ async function addEvent() {
   if (!/^\d{1,2}:\d{2}/.test(timePart)) timePart += ':00';
   var startAt = date + 'T' + timePart + ':00';
 
-  var description = (lineupEl && lineupEl.value.trim()) || '';
+  var lineupStr = (lineupEl && lineupEl.value.trim()) || '';
+  var descStr = (descEl && descEl.value.trim()) || '';
+  var description = [lineupStr ? 'Lineup: ' + lineupStr : '', descStr].filter(Boolean).join('\n\n') || undefined;
   var previewEl = document.getElementById('ev-cover-preview');
   var coverImage = (previewEl && previewEl.getAttribute('data-cover-url')) || undefined;
 
