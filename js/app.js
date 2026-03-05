@@ -685,13 +685,16 @@ async function renderEventDetail(eventId) {
         ${coverBlock}
         ${e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date()) ? '<span class="badge badge-live" style="position:absolute;top:1rem;left:1rem">🔴 LIVE</span>' : '<span class="badge badge-primary" style="position:absolute;top:1rem;left:1rem">'+new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })+'</span>'}
       </div>
-      <div style="padding:1.2rem">
+      <div style="padding:0.5rem 1.2rem 1.2rem">
         ${editImageBtn}
-        <h2 style="font-size:1.5rem;font-weight:900;margin-bottom:0.3rem;margin-top:0.5rem">${e.title}</h2>
-        <div style="color:var(--primary);font-weight:600;margin-bottom:0.5rem">📍 ${e.venue || 'Venue'}</div>
-        <div style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem">🕐 ${new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
-        <p style="font-size:0.9rem;line-height:1.6;color:rgba(240,230,255,0.8)">${e.description || 'Una experiencia cósmica única te espera.'}</p>
-        <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap">
+        <h2 style="font-size:1.5rem;font-weight:900;margin-bottom:0.25rem;margin-top:0;letter-spacing:0.02em;text-transform:uppercase;text-align:center">${e.title}</h2>
+        <div style="display:flex;align-items:center;justify-content:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem;font-size:0.9rem;color:var(--text-muted)">
+          <span style="color:var(--primary);font-weight:600">📍 ${e.venue || 'Lugar'}</span>
+          <span style="opacity:0.6">·</span>
+          <span>🕐 ${new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
+        </div>
+        <p style="font-size:0.9rem;line-height:1.55;color:rgba(240,230,255,0.85);margin-bottom:1rem">${e.description || 'Una experiencia cósmica única te espera.'}</p>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
           <span class="badge badge-glass">${e.status}</span>
           <span class="badge badge-glass">📍 ${e.city || 'Sin ciudad'}</span>
         </div>
