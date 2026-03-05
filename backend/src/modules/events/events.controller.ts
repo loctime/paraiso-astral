@@ -180,6 +180,18 @@ export const getEventById = async (req: Request, res: Response, next: NextFuncti
       select: { id: true, name: true },
     });
 
+    let canEdit = false;
+    if (req.user?.id) {
+      const membership = await prisma.membership.findFirst({
+        where: {
+          userId: req.user.id,
+          organizationId: event.organizationId,
+          role: { in: [MembershipRole.ADMIN, MembershipRole.OWNER] },
+        },
+      });
+      canEdit = !!membership || req.user.role === UserRole.ADMIN;
+    }
+
     const eventPublic: EventPublic = {
       id: event.id,
       title: event.title,
@@ -192,6 +204,7 @@ export const getEventById = async (req: Request, res: Response, next: NextFuncti
       city: event.city,
       status: event.status,
       organization: org ? { id: org.id, name: org.name } : { id: event.organizationId, name: '' },
+      canEdit,
     };
 
     res.json(eventPublic);
@@ -352,10 +365,53 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
       res.status(403).json({ error: 'No tienes permiso para editar este evento' });
       return;
     }
-    const body = req.body as { coverImage?: string };
-    const updates: { coverImage?: string | null } = {};
+    const body = req.body as {
+      coverImage?: string;
+      title?: string;
+      venue?: string;
+      startAt?: string;
+      endAt?: string;
+      description?: string;
+    };
+    const updates: {
+      coverImage?: string | null;
+      title?: string;
+      venue?: string;
+      startAt?: Date;
+      endAt?: Date | null;
+      description?: string;
+    } = {};
     if (typeof body.coverImage === 'string') {
       updates.coverImage = body.coverImage.trim() || null;
+    }
+    if (typeof body.title === 'string' && body.title.trim()) {
+      updates.title = body.title.trim();
+    }
+    if (typeof body.venue === 'string' && body.venue.trim()) {
+      updates.venue = body.venue.trim();
+    }
+    if (typeof body.description === 'string') {
+      updates.description = body.description.trim();
+    }
+    if (body.startAt) {
+      try {
+        const d = new Date(body.startAt);
+        if (!Number.isNaN(d.getTime())) updates.startAt = d;
+      } catch {
+        // ignore invalid date
+      }
+    }
+    if (body.endAt !== undefined) {
+      if (body.endAt === null || body.endAt === '') {
+        updates.endAt = null;
+      } else {
+        try {
+          const d = new Date(body.endAt);
+          if (!Number.isNaN(d.getTime())) updates.endAt = d;
+        } catch {
+          // ignore
+        }
+      }
     }
     if (Object.keys(updates).length === 0) {
       const current = await prisma.event.findUnique({

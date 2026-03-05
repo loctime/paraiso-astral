@@ -14,6 +14,8 @@ export interface EventPublic {
     id: string;
     name: string;
   };
+  /** Present when request is authenticated: true if user can edit (ADMIN/OWNER of org or global admin). */
+  canEdit?: boolean;
 }
 
 export interface EventsQueryParams {

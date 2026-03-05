@@ -271,7 +271,7 @@ async function renderHome(prependEvents) {
     if (!events || events.length === 0) {
       showErrorState(content, 'No hay eventos disponibles', null, {
         label: '➕ Nuevo Evento',
-        onclick: "openModal('modal-add-event')"
+        onclick: "if(window.AppState)window.AppState.editingEvent=null;openModal('modal-add-event')"
       });
       return;
     }
@@ -304,7 +304,7 @@ async function renderHome(prependEvents) {
           <span class="events-dropdown-title">Eventos</span>
           <span class="events-dropdown-count">${homeEvents.length}</span>
         </button>
-        <button type="button" class="events-dropdown-add" onclick="event.stopPropagation();openModal('modal-add-event')" aria-label="Agregar evento" title="Agregar evento">+</button>
+        <button type="button" class="events-dropdown-add" onclick="event.stopPropagation();if(window.AppState)window.AppState.editingEvent=null;openModal('modal-add-event')" aria-label="Agregar evento" title="Agregar evento">+</button>
       </div>
       <div class="events-dropdown-body" hidden>
         ${homeEvents.length
@@ -383,12 +383,16 @@ function renderEventCompactCard(e) {
   var title = (e.title || '').replace(/</g, '&lt;');
   var venue = (e.venue || '').replace(/</g, '&lt;');
   var date = new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
+  var editBtn = (window.AppState && window.AppState.currentUser)
+    ? '<button type="button" class="btn btn-ghost event-compact-btn-editar" style="font-size:0.75rem;padding:0.35rem 0.5rem" onclick="event.stopPropagation();openEditEventModal(\'' + safeId + '\')">✏️ Editar</button>'
+    : '';
   return '<div class="event-compact-card">'
     + '<div class="event-compact-thumb">' + thumb + '</div>'
     + '<div class="event-compact-info">'
     + '<div class="event-compact-name">' + title + '</div>'
     + '<div class="event-compact-meta">' + date + ' · ' + venue + '</div>'
     + '<div class="event-compact-actions">'
+    + editBtn
     + '<button type="button" class="btn btn-outline event-compact-btn-vermas" onclick="navigate(\'event-detail\',\'' + safeId + '\')">Ver más</button>'
     + '<button type="button" class="btn btn-primary event-compact-btn-comprar" onclick="navigate(\'tickets\',\'' + safeId + '\')">Comprar</button>'
     + '</div></div></div>';
@@ -420,6 +424,7 @@ function renderEventCardMini(e) {
             <div class="event-date-badge"><div class="event-date-month">${new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short' }).toUpperCase()}</div><div class="event-date-day">${new Date(e.startAt).getDate()}</div></div>
           </div>
           <div class="event-actions">
+            ${(window.AppState && window.AppState.currentUser) ? '<button type="button" class="btn btn-ghost" style="padding:0.5rem 0.9rem;font-size:0.8rem" onclick="event.stopPropagation();openEditEventModal(\'' + safeId + '\')">✏️ Editar</button>' : ''}
             <button type="button" class="btn btn-outline" style="padding:0.5rem 0.9rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('event-detail','${safeId}')">Ver detalle</button>
             <button type="button" class="btn btn-primary" style="padding:0.5rem 0.9rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('tickets','${safeId}')">🎫 Entradas</button>
           </div>
@@ -593,8 +598,9 @@ function renderEventCardFull(e) {
         </div>
         <div class="event-lineup" style="margin-top:0.5rem">🕐 ${new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
         <div class="event-lineup">📍 ${e.city || e.venue}</div>
-        <div style="display:flex;gap:0.5rem;margin-top:0.75rem">
-          <button class="btn btn-primary" style="flex:1;padding:0.6rem;font-size:0.78rem" onclick="event.stopPropagation();navigate('tickets','${safeId}')">🎫 Comprar</button>
+        <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap">
+          ${(window.AppState && window.AppState.currentUser) ? '<button class="btn btn-ghost" style="padding:0.6rem 0.8rem;font-size:0.78rem" onclick="event.stopPropagation();openEditEventModal(\'' + safeId + '\')">✏️ Editar</button>' : ''}
+          <button class="btn btn-primary" style="flex:1;padding:0.6rem;font-size:0.78rem;min-width:0" onclick="event.stopPropagation();navigate('tickets','${safeId}')">🎫 Comprar</button>
           <button class="btn btn-outline" style="padding:0.6rem 0.8rem;font-size:0.78rem" onclick="event.stopPropagation();navigate('event-detail', '${safeId}')">Ver más</button>
         </div>
       </div>
@@ -617,13 +623,28 @@ async function renderEventDetail(eventId) {
   
   try {
     var e = null;
+    var useAuth = !!window.AppState?.currentUser;
     try {
-      e = await window.ApiClient.get('/api/events/' + eventId + '?_=' + Date.now(), { skipAuth: true });
+      e = await window.ApiClient.get('/api/events/' + eventId + '?_=' + Date.now(), { skipAuth: !useAuth });
     } catch (err) {
-      // Si el detalle por ID falla (ej. evento privado), intentar desde el listado
-      var response = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
-      var events = response.data || [];
-      e = events.find(function (ev) { return ev.id === eventId; });
+      if (useAuth) {
+        try {
+          e = await window.ApiClient.get('/api/events/' + eventId + '?_=' + Date.now(), { skipAuth: true });
+        } catch (_) {}
+      }
+      if (!e) {
+        var response = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
+        var events = response.data || [];
+        e = events.find(function (ev) { return ev.id === eventId; });
+      }
+    }
+    if (useAuth && e && e.canEdit !== true) {
+      try {
+        var withAuth = await window.ApiClient.get('/api/events/' + eventId + '?_=' + Date.now(), { skipAuth: false });
+        if (withAuth && withAuth.id === e.id) {
+          e = withAuth;
+        }
+      } catch (_) {}
     }
     if (!e) {
       content.innerHTML = `
@@ -643,7 +664,9 @@ async function renderEventDetail(eventId) {
     var coverBlock = isImageUrl(e.coverImage)
       ? '<img src="' + e.coverImage.replace(/"/g, '&quot;') + '" alt="" style="width:100%;height:220px;object-fit:cover;display:block">'
       : '<div style="width:100%;height:220px;display:flex;align-items:center;justify-content:center;font-size:6rem">🌌</div>';
-    var editImageBtn = '<button type="button" class="btn btn-ghost" style="margin-top:0.5rem;font-size:0.8rem" onclick="editEventCover(\'' + e.id + '\')">📷 Editar imagen</button>';
+    var canEdit = e.canEdit === true;
+    var editImageBtn = canEdit ? '<button type="button" class="btn btn-ghost" style="margin-top:0.5rem;font-size:0.8rem" onclick="editEventCover(\'' + e.id + '\')">📷 Editar imagen</button>' : '';
+    var editEventBtn = canEdit ? '<button type="button" class="btn btn-outline btn-full" style="margin-top:0.5rem" onclick="openEditEventModal(\'' + e.id.replace(/'/g, "\\'") + '\')">✏️ Editar evento</button>' : '';
     content.innerHTML = `
     <button onclick="navigate('events')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
     <div style="border-radius:var(--radius-xl);overflow:hidden;border:1px solid var(--border);margin-bottom:1.2rem">
@@ -699,6 +722,7 @@ async function renderEventDetail(eventId) {
     <div style="margin-top:1.5rem">
       <button class="btn btn-primary btn-full" onclick="navigate('tickets','${e.id}')">🎫 Comprar Entradas</button>
       <button class="btn btn-outline btn-full" style="margin-top:0.5rem" onclick="shareEvent('${e.id}')">📤 Compartir Evento</button>
+      ${editEventBtn}
     </div>
   `;
     
@@ -1110,7 +1134,7 @@ async function renderAdmin() {
           <div style="font-size:1.8rem;font-weight:900">${totalEvents}</div>
           <div style="font-size:0.78rem;color:var(--text-muted)">Eventos totales</div>
         </div>
-        <button class="btn btn-primary" onclick="openModal('modal-add-event')">
+        <button class="btn btn-primary" onclick="if(window.AppState)window.AppState.editingEvent=null;openModal('modal-add-event')">
           ➕ Nuevo Evento
         </button>
       </div>
@@ -1266,14 +1290,53 @@ function installPWA() {
 }
 
 // ── ADD EVENT MODAL ─────────────────────────────────────────────────────────
+function openEditEventModal(eventId) {
+  window.ApiClient.get('/api/events/' + eventId).then(function (e) {
+    if (!window.AppState) window.AppState = {};
+    window.AppState.editingEvent = e;
+    window.openModal('modal-add-event');
+  }).catch(function (err) {
+    toast('❌ No se pudo cargar el evento');
+    console.error(err);
+  });
+}
+
 function renderAddEventModal() {
+  var editing = window.AppState && window.AppState.editingEvent;
+  var isEdit = !!editing;
+  var title = isEdit ? '✏️ Editar Evento' : '🎉 Nuevo Evento';
+  var submitLabel = isEdit ? 'Guardar cambios' : '✅ Crear Evento';
+  var dateVal = '';
+  var timeVal = '20:00';
+  var titleVal = '';
+  var venueVal = '';
+  var lineupVal = '';
+  var coverPreviewHtml = '';
+  var coverUrlAttr = '';
+  if (isEdit && editing) {
+    titleVal = (editing.title || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    venueVal = (editing.venue || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    lineupVal = (editing.description || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    if (editing.startAt) {
+      var d = new Date(editing.startAt);
+      dateVal = d.toISOString().slice(0, 10);
+      var h = d.getHours();
+      var m = d.getMinutes();
+      timeVal = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+    }
+    if (editing.coverImage) {
+      var safeCover = String(editing.coverImage).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+      coverPreviewHtml = '<img src="' + safeCover + '" alt="" style="max-width:100%;max-height:120px;border-radius:var(--radius);border:1px solid var(--border)">';
+      coverUrlAttr = ' data-cover-url="' + safeCover + '"';
+    }
+  }
   const modal = document.getElementById('modal-add-event');
   modal.querySelector('.bottom-sheet').innerHTML = `
     <div class="sheet-handle"></div>
-    <div class="sheet-title">🎉 Nuevo Evento</div>
-    <div class="form-group"><label>Nombre del evento</label><input class="input" type="text" placeholder="Ej: Cosmic Rave Vol. 3" id="ev-title" /></div>
-    <div class="form-group"><label>Venue / Lugar</label><input class="input" type="text" placeholder="Nombre del lugar" id="ev-venue" /></div>
-    <div class="form-group"><label>Fecha</label><input class="input" type="date" id="ev-date" /></div>
+    <div class="sheet-title">${title}</div>
+    <div class="form-group"><label>Nombre del evento</label><input class="input" type="text" placeholder="Ej: Cosmic Rave Vol. 3" id="ev-title" value="${titleVal}" /></div>
+    <div class="form-group"><label>Venue / Lugar</label><input class="input" type="text" placeholder="Nombre del lugar" id="ev-venue" value="${venueVal}" /></div>
+    <div class="form-group"><label>Fecha</label><input class="input" type="date" id="ev-date" value="${dateVal}" /></div>
     <div class="form-group"><label>Horario</label>
       <div class="horario-buttons" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem">
         <button type="button" class="btn btn-ghost btn-sm ev-time-btn" data-time="20:00">20:00</button>
@@ -1282,17 +1345,17 @@ function renderAddEventModal() {
         <button type="button" class="btn btn-ghost btn-sm ev-time-btn" data-time="23:00">23:00</button>
         <button type="button" class="btn btn-ghost btn-sm ev-time-btn" data-time="00:00">00:00</button>
       </div>
-      <input class="input" type="text" placeholder="22:00 - 06:00" id="ev-time" />
+      <input class="input" type="text" placeholder="22:00 - 06:00" id="ev-time" value="${timeVal}" />
     </div>
-    <div class="form-group"><label>Lineup (separado por comas)</label><input class="input" type="text" placeholder="DJ1, DJ2, DJ3" id="ev-lineup" /></div>
-    <div class="form-group"><label>Imagen de portada</label><input class="input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" id="ev-cover" /><div id="ev-cover-preview" style="margin-top:0.5rem;min-height:0"></div></div>
+    <div class="form-group"><label>Lineup (separado por comas)</label><input class="input" type="text" placeholder="DJ1, DJ2, DJ3" id="ev-lineup" value="${lineupVal}" /></div>
+    <div class="form-group"><label>Imagen de portada</label><input class="input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" id="ev-cover" /><div id="ev-cover-preview" style="margin-top:0.5rem;min-height:0"${coverUrlAttr}>${coverPreviewHtml}</div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;margin-bottom:1rem">
       <div class="form-group" style="margin-bottom:0"><label>General $</label><input class="input" type="number" placeholder="45" id="ev-gen" /></div>
       <div class="form-group" style="margin-bottom:0"><label>VIP $</label><input class="input" type="number" placeholder="120" id="ev-vip" /></div>
       <div class="form-group" style="margin-bottom:0"><label>Backstage $</label><input class="input" type="number" placeholder="200" id="ev-back" /></div>
     </div>
-    <button class="btn btn-primary btn-full" onclick="addEvent()">✅ Crear Evento</button>
-    <button class="btn btn-ghost btn-full" style="margin-top:0.5rem" onclick="closeModal('modal-add-event')">Cancelar</button>
+    <button class="btn btn-primary btn-full" onclick="addEvent()">${submitLabel}</button>
+    <button class="btn btn-ghost btn-full" style="margin-top:0.5rem" onclick="if(window.AppState)window.AppState.editingEvent=null;closeModal('modal-add-event')">Cancelar</button>
   `;
   modal.querySelectorAll('.ev-time-btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -1320,6 +1383,7 @@ function renderAddEventModal() {
 }
 
 async function addEvent() {
+  var editing = window.AppState && window.AppState.editingEvent;
   var titleEl = document.getElementById('ev-title');
   var venueEl = document.getElementById('ev-venue');
   var dateEl = document.getElementById('ev-date');
@@ -1338,6 +1402,23 @@ async function addEvent() {
   var description = (lineupEl && lineupEl.value.trim()) || '';
   var previewEl = document.getElementById('ev-cover-preview');
   var coverImage = (previewEl && previewEl.getAttribute('data-cover-url')) || undefined;
+
+  if (editing && editing.id) {
+    var payload = { title: title, venue: venue, startAt: startAt, description: description || undefined, coverImage: coverImage };
+    closeModal('modal-add-event');
+    try {
+      await window.ApiClient.request('/api/events/' + editing.id, { method: 'PATCH', body: payload });
+      if (window.AppState) window.AppState.editingEvent = null;
+      toast('✅ Evento actualizado.');
+      renderEventDetail(editing.id);
+      var adminContent = document.querySelector('#page-admin .page-content');
+      if (adminContent) renderAdmin();
+    } catch (err) {
+      console.error('[addEvent] PATCH error:', err);
+      toast('❌ ' + (err && err.message ? err.message : 'Error al actualizar'));
+    }
+    return;
+  }
 
   var payload = { title: title, venue: venue, startAt: startAt, description: description || undefined, coverImage: coverImage };
   console.log('[addEvent] POST /api/events payload:', payload);
