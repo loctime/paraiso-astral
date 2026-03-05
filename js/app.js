@@ -46,6 +46,16 @@ function navigate(pageId, data) {
     pageId = 'login';
   }
 
+  // Al ir al detalle del evento, guardar desde qué página venimos para el botón Volver
+  if (pageId === 'event-detail') {
+    var fromEl = document.querySelector('.page.active');
+    var fromId = fromEl ? fromEl.id.replace('page-', '') : '';
+    if (fromId && fromId !== 'event-detail' && fromId !== 'login') {
+      if (!window.AppState) window.AppState = {};
+      window.AppState.eventDetailReturnTo = fromId;
+    }
+  }
+
   // Update UI
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const page = document.getElementById('page-' + pageId);
@@ -612,9 +622,10 @@ async function renderEventDetail(eventId) {
   const el = document.getElementById('page-event-detail');
   const content = el.querySelector('.page-content');
   
+  var returnTo = (window.AppState && window.AppState.eventDetailReturnTo && window.AppState.eventDetailReturnTo !== 'event-detail') ? window.AppState.eventDetailReturnTo : 'events';
   // Show loading state
   content.innerHTML = `
-    <button onclick="navigate('events')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
+    <button onclick="navigate('` + returnTo + `')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
     <div style="text-align:center;padding:2rem">
       <div style="font-size:2rem">🔄</div>
       <div style="margin-top:0.5rem;color:var(--text-muted)">Cargando evento...</div>
@@ -648,7 +659,7 @@ async function renderEventDetail(eventId) {
     }
     if (!e) {
       content.innerHTML = `
-        <button onclick="navigate('events')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
+        <button onclick="navigate('` + returnTo + `')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
         <div class="empty-state">
           <div class="empty-icon">📅</div>
           <div class="empty-title">Evento no encontrado</div>
@@ -668,7 +679,7 @@ async function renderEventDetail(eventId) {
     var editImageBtn = canEdit ? '<button type="button" class="btn btn-ghost" style="margin-top:0.5rem;font-size:0.8rem" onclick="editEventCover(\'' + e.id + '\')">📷 Editar imagen</button>' : '';
     var editEventBtn = canEdit ? '<button type="button" class="btn btn-outline btn-full" style="margin-top:0.5rem" onclick="openEditEventModal(\'' + e.id.replace(/'/g, "\\'") + '\')">✏️ Editar evento</button>' : '';
     content.innerHTML = `
-    <button onclick="navigate('events')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
+    <button onclick="navigate('` + returnTo + `')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
     <div style="border-radius:var(--radius-xl);overflow:hidden;border:1px solid var(--border);margin-bottom:1.2rem">
       <div style="height:220px;background:linear-gradient(135deg,#1a0820,#3d0055,#1a0820);position:relative;overflow:hidden">
         ${coverBlock}
@@ -716,7 +727,7 @@ async function renderEventDetail(eventId) {
 
     <div style="display:flex;gap:1rem;margin-top:2rem">
       <button class="btn btn-primary" style="flex:1" onclick="navigate('tickets','${e.id}')">🎫 Comprar Entradas</button>
-      <button class="btn btn-outline" onclick="navigate('events')">← Ver Todos</button>
+      <button class="btn btn-outline" onclick="navigate('` + returnTo + `')">← Ver Todos</button>
     </div>
 
     <div style="margin-top:1.5rem">
@@ -728,8 +739,9 @@ async function renderEventDetail(eventId) {
     
   } catch (error) {
     console.error('Error loading event detail:', error);
+    var errReturnTo = (window.AppState && window.AppState.eventDetailReturnTo && window.AppState.eventDetailReturnTo !== 'event-detail') ? window.AppState.eventDetailReturnTo : 'events';
     content.innerHTML = `
-      <button onclick="navigate('events')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
+      <button onclick="navigate('` + errReturnTo + `')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
       <div class="empty-state">
         <div class="empty-icon">⚠️</div>
         <div class="empty-title">Error al cargar evento</div>
