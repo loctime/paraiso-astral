@@ -124,15 +124,22 @@ function initializeErrorHandling() {
  * @param {HTMLElement} container - Container element
  * @param {string} message - Loading message
  */
-function showLoading(container, message = 'Cargando...') {
-  if (!container) return;
-  
-  container.innerHTML = `
-    <div style="text-align:center;padding:2rem">
-      <div style="font-size:2rem;animation:spin 1s linear infinite">🔄</div>
-      <div style="margin-top:1rem;color:var(--text-muted)">${message}</div>
+function renderPortalLoader(message = 'Sintonizando frecuencia astral...') {
+  const safeMessage = String(message).replace(/</g, '&lt;');
+  return `
+    <div class="psy-loader" role="status" aria-live="polite" aria-busy="true">
+      <div class="psy-loader-bg"></div>
+      <div class="psy-loader-orbit"></div>
+      <div class="psy-loader-ring"></div>
+      <div class="psy-loader-core"></div>
+      <div class="psy-loader-text">${safeMessage}</div>
     </div>
   `;
+}
+
+function showLoading(container, message = 'Cargando...') {
+  if (!container) return;
+  container.innerHTML = renderPortalLoader(message);
 }
 
 /**
@@ -464,9 +471,7 @@ async function renderEvents(filter, prependEvents) {
 
     ${renderCalendar()}
 
-    <div id="events-list">
-      <div style="text-align:center;padding:2rem"><div style="font-size:2rem">🔄</div><div style="margin-top:1rem;color:var(--text-muted)">Cargando eventos...</div></div>
-    </div>
+    <div id="events-list">${renderPortalLoader('Sintonizando cartelera astral...')}</div>
   `;
   
   try {
@@ -732,10 +737,7 @@ async function renderEventDetail(eventId) {
   // Show loading state
   content.innerHTML = `
     <button onclick="navigate('` + returnTo + `')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
-    <div style="text-align:center;padding:2rem">
-      <div style="font-size:2rem">🔄</div>
-      <div style="margin-top:0.5rem;color:var(--text-muted)">Cargando evento...</div>
-    </div>
+    ${renderPortalLoader('Abriendo portal del evento...')}
   `;
   
   try {
@@ -924,7 +926,7 @@ async function renderArtists(filter = 'all') {
   const content = el.querySelector('.page-content');
   
   // Show loading state
-  content.innerHTML = '<div style="text-align:center;padding:2rem"><div style="font-size:2rem">🔄</div><div style="margin-top:1rem;color:var(--text-muted)">Cargando artistas...</div></div>';
+  content.innerHTML = renderPortalLoader('Invocando artistas...');
   
   try {
     // Mock artists data for now (would come from backend API)
@@ -1038,7 +1040,7 @@ async function renderTicketsPage(eventId) {
   AppState.selectedEventId = eventId;
   var el = document.getElementById('page-tickets');
   var content = el.querySelector('.page-content');
-  content.innerHTML = '<div style="text-align:center;padding:2rem"><div style="font-size:2rem">🔄</div><div style="margin-top:1rem;color:var(--text-muted)">Cargando...</div></div>';
+  content.innerHTML = renderPortalLoader('Sincronizando accesos...');
 
   try {
     var res = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });

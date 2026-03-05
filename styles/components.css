@@ -715,3 +715,119 @@ label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bo
 
 /* ===== PIE CHART SVG ===== */
 .pie-svg { width: 120px; height: 120px; }
+
+
+/* ===== PSY PORTAL LOADER ===== */
+.psy-loader {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 190px;
+  margin: 0.8rem 0 0.4rem;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+}
+
+.psy-loader-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(0, 242, 255, 0.16), transparent 48%),
+    radial-gradient(circle at 75% 70%, rgba(57, 255, 20, 0.12), transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(209, 37, 244, 0.18), transparent 60%);
+  filter: saturate(1.2);
+  animation: portalBgDrift 5s ease-in-out infinite;
+}
+
+.psy-loader-orbit,
+.psy-loader-ring,
+.psy-loader-core {
+  position: absolute;
+  border-radius: 50%;
+}
+
+.psy-loader-orbit {
+  width: 88px;
+  height: 88px;
+  border: 2px solid rgba(0, 242, 255, 0.32);
+  border-top-color: rgba(57, 255, 20, 0.92);
+  border-right-color: rgba(209, 37, 244, 0.9);
+  filter: drop-shadow(0 0 12px rgba(0, 242, 255, 0.5));
+  animation: portalOrbit 1.8s linear infinite;
+}
+
+.psy-loader-ring {
+  width: 56px;
+  height: 56px;
+  border: 2px solid rgba(209, 37, 244, 0.55);
+  border-left-color: rgba(0, 242, 255, 0.95);
+  border-bottom-color: rgba(57, 255, 20, 0.95);
+  box-shadow:
+    0 0 18px rgba(209, 37, 244, 0.45),
+    inset 0 0 12px rgba(0, 242, 255, 0.2);
+  animation: portalOrbitReverse 1.2s linear infinite;
+}
+
+.psy-loader-core {
+  width: 18px;
+  height: 18px;
+  background: radial-gradient(circle at 40% 35%, #ecfffb 0%, #00f2ff 45%, #d125f4 100%);
+  box-shadow:
+    0 0 18px rgba(0, 242, 255, 0.85),
+    0 0 24px rgba(209, 37, 244, 0.55);
+  animation: portalPulse 1s ease-in-out infinite;
+}
+
+.psy-loader-text {
+  position: absolute;
+  bottom: 0.9rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text);
+  text-shadow: 0 0 10px rgba(0, 242, 255, 0.45);
+  letter-spacing: 0.03em;
+}
+
+@keyframes portalOrbit {
+  from { transform: rotate(0deg) scale(0.97); }
+  to { transform: rotate(360deg) scale(1.03); }
+}
+
+@keyframes portalOrbitReverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes portalPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+
+@keyframes portalBgDrift {
+  0%, 100% { transform: scale(1) translate3d(0, 0, 0); }
+  50% { transform: scale(1.04) translate3d(0, -4px, 0); }
+}
+
+@media (max-width: 360px) {
+  .psy-loader {
+    min-height: 168px;
+  }
+
+  .psy-loader-orbit {
+    width: 78px;
+    height: 78px;
+  }
+
+  .psy-loader-ring {
+    width: 50px;
+    height: 50px;
+  }
+
+  .psy-loader-text {
+    font-size: 0.82rem;
+  }
+}
