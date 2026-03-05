@@ -299,10 +299,13 @@ async function renderHome(prependEvents) {
     </div>` : ''}
 
         <div class="events-dropdown card">
-      <button type="button" class="events-dropdown-toggle" onclick="toggleHomeEventsDropdown(this)" aria-expanded="false">
-        <span class="events-dropdown-title">Eventos</span>
-        <span class="events-dropdown-count">${homeEvents.length}</span>
-      </button>
+      <div class="events-dropdown-header">
+        <button type="button" class="events-dropdown-toggle" onclick="toggleHomeEventsDropdown(this)" aria-expanded="false">
+          <span class="events-dropdown-title">Eventos</span>
+          <span class="events-dropdown-count">${homeEvents.length}</span>
+        </button>
+        <button type="button" class="events-dropdown-add" onclick="event.stopPropagation();openModal('modal-add-event')" aria-label="Agregar evento" title="Agregar evento">+</button>
+      </div>
       <div class="events-dropdown-body" hidden>
         ${homeEvents.length
           ? homeEvents.map(e => renderEventCompactCard(e)).join('')
@@ -376,15 +379,19 @@ function renderEventCompactCard(e) {
   var safeId = (e.id || '').replace(/'/g, "\\'");
   var thumb = isImageUrl(e.coverImage)
     ? '<img src="' + e.coverImage.replace(/"/g, '&quot;') + '" alt="">'
-    : 'EVENT';
+    : '🌌';
   var title = (e.title || '').replace(/</g, '&lt;');
   var venue = (e.venue || '').replace(/</g, '&lt;');
   var date = new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
-  return '<div class="event-compact-card" onclick="navigate(\'event-detail\',\'' + safeId + '\')">'
+  return '<div class="event-compact-card">'
     + '<div class="event-compact-thumb">' + thumb + '</div>'
-    + '<div class="event-compact-info"><div class="event-compact-name">' + title + '</div><div class="event-compact-meta">' + date + ' - ' + venue + '</div></div>'
-    + '<button type="button" class="btn btn-primary event-compact-btn" onclick="event.stopPropagation();navigate(\'tickets\',\'' + safeId + '\')">Entradas</button>'
-    + '</div>';
+    + '<div class="event-compact-info">'
+    + '<div class="event-compact-name">' + title + '</div>'
+    + '<div class="event-compact-meta">' + date + ' · ' + venue + '</div>'
+    + '<div class="event-compact-actions">'
+    + '<button type="button" class="btn btn-outline event-compact-btn-vermas" onclick="navigate(\'event-detail\',\'' + safeId + '\')">Ver más</button>'
+    + '<button type="button" class="btn btn-primary event-compact-btn-comprar" onclick="navigate(\'tickets\',\'' + safeId + '\')">Comprar</button>'
+    + '</div></div></div>';
 }
 
 function renderEventCardMini(e) {
