@@ -329,43 +329,62 @@ label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bo
 .event-detail-hero-wrap {
   position: relative;
   margin-bottom: 1.2rem;
+  contain: layout style;
 }
+
+/* Ambient blurred background: hero image continues into page (Spotify-style) */
+.event-detail-bg-blur {
+  position: absolute;
+  inset: -15%;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: blur(60px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
 .event-detail-hero-glow {
   --event-detail-glow-color: 209, 37, 244;
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 180%;
-  max-width: 160vw;
-  height: 140%;
-  min-height: 420px;
+  width: 240%;
+  height: 200%;
+  min-height: 480px;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  z-index: 0;
+  z-index: 1;
   opacity: 0;
-  transition: opacity 0.7s ease;
+  transition: opacity 0.8s ease;
   background: radial-gradient(
-    ellipse 75% 60% at 50% 35%,
-    rgba(var(--event-detail-glow-color), 0.55) 0%,
-    rgba(var(--event-detail-glow-color), 0.28) 40%,
-    rgba(var(--event-detail-glow-color), 0.1) 65%,
-    transparent 85%
+    ellipse 70% 55% at 50% 40%,
+    rgba(var(--event-detail-glow-color), 0.4) 0%,
+    rgba(var(--event-detail-glow-color), 0.18) 45%,
+    rgba(var(--event-detail-glow-color), 0.06) 75%,
+    transparent 100%
   );
-  filter: blur(56px);
+  filter: blur(80px);
 }
 .event-detail-hero-glow--on {
-  opacity: 1;
+  opacity: 0.35;
+  animation: event-detail-glow-breathe 8s ease-in-out infinite;
+}
+@keyframes event-detail-glow-breathe {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.45; }
 }
 
-/* Page de detalle del evento: fondo teñido por el color dominante */
+/* Page de detalle: gradiente más bajo y ancho, tinte suave en la mitad superior */
 #page-event-detail.event-detail-page--themed {
   --event-detail-dominant: 209, 37, 244;
-  background: 
+  background:
     radial-gradient(
-      ellipse 100% 80% at 50% 0%,
-      rgba(var(--event-detail-dominant), 0.22) 0%,
-      rgba(var(--event-detail-dominant), 0.08) 45%,
-      transparent 70%
+      ellipse 120% 100% at 50% 20%,
+      rgba(var(--event-detail-dominant), 0.18) 0%,
+      rgba(var(--event-detail-dominant), 0.06) 50%,
+      transparent 75%
     ),
     var(--bg-dark);
   min-height: 100%;
@@ -375,7 +394,7 @@ label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bo
 }
 .event-detail-hero {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   border-radius: var(--radius-xl);
   overflow: hidden;
   min-height: 320px;

@@ -621,7 +621,8 @@ function renderEventCardFull(e) {
 var EVENT_DETAIL_DEFAULT_GLOW = '209, 37, 244'; // theme primary RGB for fallback
 
 /**
- * Extract a dominant/vibrant color from an image via canvas. Returns rgb(r,g,b) or null on failure.
+ * Extract a dominant/vibrant color from an image via canvas. Returns "r,g,b" or null.
+ * Skips very dark pixels (r+g+b < 120) so the glow stays visible. Runs once per image load.
  */
 function getDominantColorFromImage(img) {
   try {
@@ -638,9 +639,11 @@ function getDominantColorFromImage(img) {
     var bestS = 0, bestR = 0, bestG = 0, bestB = 0;
     for (var i = 0; i < data.length; i += 4) {
       var pr = data[i], pg = data[i + 1], pb = data[i + 2];
+      var sum = pr + pg + pb;
+      if (sum < 120) continue;
       var max = Math.max(pr, pg, pb), min = Math.min(pr, pg, pb);
       var l = (max + min) / 2 / 255;
-      if (l < 0.15 || l > 0.92) continue;
+      if (l > 0.92) continue;
       r += pr; g += pg; b += pb; count++;
       var s = max === min ? 0 : (max - min) / (l < 0.5 ? max + min : 2 - max - min);
       if (s > bestS) { bestS = s; bestR = pr; bestG = pg; bestB = pb; }
@@ -648,7 +651,7 @@ function getDominantColorFromImage(img) {
     if (count > 0 && bestS < 0.1) {
       return Math.round(r / count) + ', ' + Math.round(g / count) + ', ' + Math.round(b / count);
     }
-    if (bestS >= 0.1) return bestR + ', ' + bestG + ', ' + bestB;
+    if (bestS >= 0.1) return Math.round(bestR) + ', ' + Math.round(bestG) + ', ' + Math.round(bestB);
     if (count > 0) return Math.round(r / count) + ', ' + Math.round(g / count) + ', ' + Math.round(b / count);
     return null;
   } catch (err) {
@@ -729,6 +732,9 @@ async function renderEventDetail(eventId) {
     var heroBg = isImageUrl(e.coverImage)
       ? '<img class="event-detail-hero__bg" src="' + e.coverImage.replace(/"/g, '&quot;') + '" alt="" crossorigin="anonymous">'
       : '<div class="event-detail-hero__bg-placeholder">🌌</div>';
+    var bgBlurStyle = isImageUrl(e.coverImage)
+      ? ' style="background-image:url(\'' + e.coverImage.replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\')"'
+      : '';
     var heroBadge = e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date())
       ? '<span class="badge badge-live event-detail-hero__badge">🔴 LIVE</span>'
       : '<span class="badge badge-primary event-detail-hero__badge">' + new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' }) + '</span>';
@@ -740,6 +746,7 @@ async function renderEventDetail(eventId) {
     content.innerHTML = `
     <button onclick="navigate('` + returnTo + `')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
     <div class="event-detail-hero-wrap">
+      <div class="event-detail-bg-blur" aria-hidden="true"${bgBlurStyle}></div>
       <div class="event-detail-hero-glow" aria-hidden="true"></div>
       <div class="event-detail-hero">
         ${heroBg}
