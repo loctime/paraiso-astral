@@ -1,4 +1,4 @@
-/* ===== COMPONENTS - PARAÍSO ASTRAL ===== */
+/* ===== COMPONENTS - PARAÃSO ASTRAL ===== */
 
 /* ===== HEADER ===== */
 .app-header {
@@ -242,6 +242,110 @@ label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bo
 .event-date-month { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--primary); font-weight: 700; }
 .event-date-day { font-family: var(--font-display); font-size: 1.2rem; font-weight: 800; line-height: 1; }
 .event-lineup { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(209,37,244,0.1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* ===== HOME EVENTS DROPDOWN ===== */
+.events-dropdown {
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+}
+.events-dropdown-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.4rem;
+  cursor: pointer;
+  position: relative;
+  padding-right: 2rem;
+}
+.events-dropdown-toggle::after {
+  content: 'v';
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%) rotate(0deg);
+  transition: transform 0.22s ease;
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+.events-dropdown-toggle[aria-expanded="true"]::after {
+  transform: translateY(-50%) rotate(180deg);
+}
+.events-dropdown-title {
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.events-dropdown-count {
+  min-width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(209,37,244,0.15);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.events-dropdown-body {
+  margin-top: 0.35rem;
+}
+.event-compact-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--bg-glass);
+  border: 1px solid rgba(209,37,244,0.15);
+  border-radius: var(--radius);
+  padding: 0.62rem;
+  margin-bottom: 0.55rem;
+  cursor: pointer;
+}
+.event-compact-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #1a0d20, #2d1b38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.event-compact-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.event-compact-info {
+  flex: 1;
+  min-width: 0;
+}
+.event-compact-name {
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.event-compact-meta {
+  margin-top: 0.15rem;
+  font-size: 0.8rem;
+  color: var(--primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.event-compact-btn {
+  padding: 0.52rem 0.8rem;
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
 
 /* ===== ARTIST CARD ===== */
 .artist-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }

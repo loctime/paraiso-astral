@@ -401,6 +401,6 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
     };
     return res.json(eventPublic);
   } catch (error) {
-    next(error);
+    return next(error);
   }
 };

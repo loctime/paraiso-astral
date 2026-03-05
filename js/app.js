@@ -276,10 +276,11 @@ async function renderHome(prependEvents) {
       return;
     }
     
-    // Find featured, live, and upcoming events
-    const featured = events.find(e => e.isFeatured) || events[0];
+        // Find live and published events for home sections
     const liveEvent = events.find(e => e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date()));
-    const upcomingEvents = events.filter(e => e.status === 'PUBLISHED' && new Date(e.startAt) > new Date()).slice(0, 3);
+    const homeEvents = events
+      .filter(e => e.status === 'PUBLISHED')
+      .sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
     
     // Mock news for now (can be replaced with real news API later)
     const recentNews = [
@@ -297,23 +298,17 @@ async function renderHome(prependEvents) {
       <span class="badge badge-live">LIVE</span>
     </div>` : ''}
 
-    ${featured ? `
-    <div class="hero hero-collapsed fade-in" id="hero-featured" onclick="toggleHeroExpand(event)" role="button" tabindex="0" aria-label="Expandir o contraer tarjeta">
-      <div class="hero-media-wrap">
-        ${(featured.coverImage && featured.coverImage.startsWith && featured.coverImage.startsWith('http')) ? '<img class="hero-img" src="' + window.ApiClient.sanitizeHTML(featured.coverImage) + '" alt="">' : '<div class="hero-placeholder star-bg">🌌</div>'}
-        <span class="hero-toggle-label">Toca para expandir / contraer</span>
+        <div class="events-dropdown card">
+      <button type="button" class="events-dropdown-toggle" onclick="toggleHomeEventsDropdown(this)" aria-expanded="false">
+        <span class="events-dropdown-title">Eventos</span>
+        <span class="events-dropdown-count">${homeEvents.length}</span>
+      </button>
+      <div class="events-dropdown-body" hidden>
+        ${homeEvents.length
+          ? homeEvents.map(e => renderEventCompactCard(e)).join('')
+          : '<div class="empty-state" style="margin:0.5rem 0"><div class="empty-title">Sin eventos publicados</div></div>'}
       </div>
-      <div class="hero-overlay"></div>
-      <div class="hero-content">
-        <span class="badge badge-primary" style="margin-bottom:0.5rem">Evento Destacado</span>
-        <h2 class="hero-title">${window.ApiClient.sanitizeHTML(featured.title)}</h2>
-        <p class="hero-sub">${new Date(featured.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} • ${window.ApiClient.sanitizeHTML(featured.venue || 'Venue')}</p>
-        <div style="display:flex;align-items:center;justify-content:flex-end;gap:0.5rem;margin-top:1rem;flex-wrap:wrap">
-          <button type="button" class="btn btn-outline" style="padding:0.6rem 1rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('event-detail','${featured.id}')">Ver detalle</button>
-          <button type="button" class="btn btn-primary" style="padding:0.6rem 1.2rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('tickets','${featured.id}')">🎫 Entradas</button>
-        </div>
-      </div>
-    </div>` : ''}
+    </div>
 
     <div class="section-header">
       <span class="section-title">Noticias & Novedades</span>
@@ -328,12 +323,6 @@ async function renderHome(prependEvents) {
         </div>`).join('')}
     </div>
 
-    <div class="section-header">
-      <span class="section-title">Próximos Eventos</span>
-      <a class="section-link" onclick="navigate('events')">Ver todos</a>
-    </div>
-    ${upcomingEvents.map(e => renderEventCardMini(e)).join('')}
-
     <div class="section-header"><span class="section-title">Astral Radar</span></div>
     <div class="card" style="padding:1rem;display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
       <div style="width:56px;height:56px;border-radius:var(--radius);background:linear-gradient(135deg,var(--primary),#6b1a8a);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:1.5rem">🎵</div>
@@ -345,8 +334,6 @@ async function renderHome(prependEvents) {
       <button class="icon-btn" onclick="toast('▶️ Reproduciendo...')">▶️</button>
     </div>
   `;
-
-    setupAccordionEventCards(content);
   } catch (error) {
     console.error('Error loading home:', error);
     showErrorState(content, 'Error al cargar eventos', 'renderHome');
@@ -374,6 +361,30 @@ function toggleHeroExpand(ev) {
   ev.preventDefault();
   var hero = document.getElementById('hero-featured');
   if (hero) hero.classList.toggle('hero-collapsed');
+}
+function toggleHomeEventsDropdown(button) {
+  if (!button) return;
+  var wrapper = button.closest('.events-dropdown');
+  if (!wrapper) return;
+  var body = wrapper.querySelector('.events-dropdown-body');
+  var isExpanded = button.getAttribute('aria-expanded') === 'true';
+  button.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+  if (body) body.hidden = isExpanded;
+}
+
+function renderEventCompactCard(e) {
+  var safeId = (e.id || '').replace(/'/g, "\\'");
+  var thumb = isImageUrl(e.coverImage)
+    ? '<img src="' + e.coverImage.replace(/"/g, '&quot;') + '" alt="">'
+    : 'EVENT';
+  var title = (e.title || '').replace(/</g, '&lt;');
+  var venue = (e.venue || '').replace(/</g, '&lt;');
+  var date = new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
+  return '<div class="event-compact-card" onclick="navigate(\'event-detail\',\'' + safeId + '\')">'
+    + '<div class="event-compact-thumb">' + thumb + '</div>'
+    + '<div class="event-compact-info"><div class="event-compact-name">' + title + '</div><div class="event-compact-meta">' + date + ' - ' + venue + '</div></div>'
+    + '<button type="button" class="btn btn-primary event-compact-btn" onclick="event.stopPropagation();navigate(\'tickets\',\'' + safeId + '\')">Entradas</button>'
+    + '</div>';
 }
 
 function renderEventCardMini(e) {
