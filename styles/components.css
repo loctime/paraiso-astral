@@ -324,6 +324,87 @@ label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bo
 .events-dropdown-body {
   margin-top: 0.35rem;
 }
+
+/* ===== EVENT DETAIL HERO CARD (overlay on image) ===== */
+.event-detail-hero {
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  position: relative;
+  min-height: 320px;
+  margin-bottom: 1.2rem;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.event-detail-hero:hover {
+  transform: scale(1.01);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(209, 37, 244, 0.15);
+}
+.event-detail-hero__bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.event-detail-hero__bg-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 6rem;
+  background: linear-gradient(135deg, #1a0820, #3d0055, #1a0820);
+}
+.event-detail-hero__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.5) 35%, rgba(0, 0, 0, 0.15) 65%, transparent 100%);
+  pointer-events: none;
+}
+.event-detail-hero__content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 1.75rem 1.25rem 1.25rem;
+  pointer-events: auto;
+}
+.event-detail-hero__title {
+  font-size: 1.65rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+  margin: 0 0 0.35rem 0;
+  line-height: 1.2;
+}
+.event-detail-hero__subtitle {
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+  margin-bottom: 0.5rem;
+}
+.event-detail-hero__meta {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.75);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.event-detail-hero__meta span:not(:first-child)::before {
+  content: '•';
+  margin-right: 0.35rem;
+  opacity: 0.8;
+}
+.event-detail-hero__badge {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 2;
+}
+
 .event-compact-card {
   background: var(--bg-card);
   border: 1px solid rgba(209,37,244,0.2);

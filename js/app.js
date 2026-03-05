@@ -672,32 +672,39 @@ async function renderEventDetail(eventId) {
     const sold = 0; // No ticket data available in new schema
     const pct = 0; // No capacity data available in new schema
 
-    var coverBlock = isImageUrl(e.coverImage)
-      ? '<img src="' + e.coverImage.replace(/"/g, '&quot;') + '" alt="" style="width:100%;height:220px;object-fit:cover;display:block">'
-      : '<div style="width:100%;height:220px;display:flex;align-items:center;justify-content:center;font-size:6rem">🌌</div>';
+    var heroBg = isImageUrl(e.coverImage)
+      ? '<img class="event-detail-hero__bg" src="' + e.coverImage.replace(/"/g, '&quot;') + '" alt="">'
+      : '<div class="event-detail-hero__bg-placeholder">🌌</div>';
+    var heroBadge = e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date())
+      ? '<span class="badge badge-live event-detail-hero__badge">🔴 LIVE</span>'
+      : '<span class="badge badge-primary event-detail-hero__badge">' + new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' }) + '</span>';
+    var metaDate = new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
+    var metaTime = new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     var canEdit = e.canEdit === true;
-    var editImageBtn = canEdit ? '<button type="button" class="btn btn-ghost" style="margin-top:0.5rem;font-size:0.8rem" onclick="editEventCover(\'' + e.id + '\')">📷 Editar imagen</button>' : '';
+    var editImageBtn = canEdit ? '<button type="button" class="btn btn-ghost" style="margin-bottom:0.75rem;font-size:0.8rem" onclick="editEventCover(\'' + e.id + '\')">📷 Editar imagen</button>' : '';
     var editEventBtn = canEdit ? '<button type="button" class="btn btn-outline btn-full" style="margin-top:0.5rem" onclick="openEditEventModal(\'' + e.id.replace(/'/g, "\\'") + '\')">✏️ Editar evento</button>' : '';
     content.innerHTML = `
     <button onclick="navigate('` + returnTo + `')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
-    <div style="border-radius:var(--radius-xl);overflow:hidden;border:1px solid var(--border);margin-bottom:1.2rem">
-      <div style="height:220px;background:linear-gradient(135deg,#1a0820,#3d0055,#1a0820);position:relative;overflow:hidden">
-        ${coverBlock}
-        ${e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date()) ? '<span class="badge badge-live" style="position:absolute;top:1rem;left:1rem">🔴 LIVE</span>' : '<span class="badge badge-primary" style="position:absolute;top:1rem;left:1rem">'+new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })+'</span>'}
+    <div class="event-detail-hero">
+      ${heroBg}
+      <div class="event-detail-hero__overlay"></div>
+      ${heroBadge}
+      <div class="event-detail-hero__content">
+        <h1 class="event-detail-hero__title">${(e.title || '').replace(/</g, '&lt;')}</h1>
+        <div class="event-detail-hero__subtitle">${(e.venue || 'Lugar').replace(/</g, '&lt;')}</div>
+        <div class="event-detail-hero__meta">
+          <span>${metaDate}</span>
+          <span>${metaTime}</span>
+          <span>${(e.status || '').replace(/</g, '&lt;')}</span>
+        </div>
       </div>
-      <div style="padding:0.5rem 1.2rem 1.2rem">
-        ${editImageBtn}
-        <h2 style="font-size:1.5rem;font-weight:900;margin-bottom:0.25rem;margin-top:0;letter-spacing:0.02em;text-transform:uppercase;text-align:center">${e.title}</h2>
-        <div style="display:flex;align-items:center;justify-content:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem;font-size:0.9rem;color:var(--text-muted)">
-          <span style="color:var(--primary);font-weight:600">📍 ${e.venue || 'Lugar'}</span>
-          <span style="opacity:0.6">·</span>
-          <span>🕐 ${new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
-        </div>
-        <p style="font-size:0.9rem;line-height:1.55;color:rgba(240,230,255,0.85);margin-bottom:1rem">${e.description || 'Una experiencia cósmica única te espera.'}</p>
-        <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
-          <span class="badge badge-glass">${e.status}</span>
-          <span class="badge badge-glass">📍 ${e.city || 'Sin ciudad'}</span>
-        </div>
+    </div>
+    <div style="margin-bottom:1rem">
+      ${editImageBtn}
+      <p style="font-size:0.9rem;line-height:1.55;color:rgba(240,230,255,0.85);margin-bottom:0.75rem">${(e.description || 'Una experiencia cósmica única te espera.').replace(/</g, '&lt;')}</p>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+        <span class="badge badge-glass">${e.status}</span>
+        <span class="badge badge-glass">📍 ${(e.city || 'Sin ciudad').replace(/</g, '&lt;')}</span>
       </div>
     </div>
 
