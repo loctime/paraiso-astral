@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const outPath = path.join(__dirname, '..', 'public', 'js', 'env.public.js');
+const outPath = path.join(__dirname, '..', 'js', 'env.public.js');
 const envPath = path.join(__dirname, '..', '.env');
 
 const PUBLIC_KEYS = [
@@ -42,7 +42,7 @@ if (fs.existsSync(envPath)) {
 }
 
 if (Object.keys(env).length === 0) {
-  console.warn('No se encontró .env ni variables VITE_* en process.env. js/env.public.js quedará vacío.');
+  console.warn('No se encontro .env ni variables VITE_* en process.env. js/env.public.js quedara vacio.');
 }
 
 const output = '// Generado por scripts/generate-env.js (process.env + .env). No editar a mano.\n' +
@@ -51,3 +51,4 @@ const output = '// Generado por scripts/generate-env.js (process.env + .env). No
 fs.mkdirSync(path.dirname(outPath), { recursive: true });
 fs.writeFileSync(outPath, output, 'utf8');
 console.log('Escrito: js/env.public.js');
+

@@ -1594,23 +1594,6 @@ async function addEvent() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-// Solo pre-render de páginas públicas. Admin/RRPP se renderan al navegar (requieren auth).
-window.addEventListener('DOMContentLoaded', function () {
-  setTimeout(function () {
-    renderHome();
-    renderEvents();
-    renderArtists();
-    renderNews();
-    renderNotifications();
-    renderProfile();
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(function () {});
-    }
-    updateNotifBadge();
-    navigate('home');
-  }, 200);
-});
-
 // Handle nav-detail pages navigation
 function navigateWithData(pageId, data) {
   if (pageId === 'news-detail') {
@@ -1801,3 +1784,5 @@ function checkAuthState() {
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', initializeApp);
+
+

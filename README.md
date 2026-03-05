@@ -64,3 +64,8 @@ npx serve .
 ```
 
 Luego abre: http://localhost:8000
+## Seguridad basica
+
+- Escaneo local: `node scripts/secret-scan.js`
+- En backend: `cd backend && npm run security:scan`
+- Hook opcional: `git config core.hooksPath .githooks`

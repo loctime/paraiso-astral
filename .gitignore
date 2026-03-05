@@ -12,7 +12,6 @@ js/env.public.js
 .env.development.local
 .env.test.local
 .env.production.local
-!js/env.public.js
 # Build outputs
 dist/
 build/
@@ -103,3 +102,5 @@ firebase-debug.log.*
 .netlify
 
 astral.serviceAccount.json
+backend/astral.serviceAccount.json
+
