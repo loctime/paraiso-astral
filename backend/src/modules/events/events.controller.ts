@@ -399,7 +399,7 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
       status: updated.status,
       organization: updated.organization,
     };
-    res.json(eventPublic);
+    return res.json(eventPublic);
   } catch (error) {
     next(error);
   }

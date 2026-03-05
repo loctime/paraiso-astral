@@ -298,7 +298,7 @@ async function renderHome(prependEvents) {
     </div>` : ''}
 
     ${featured ? `
-    <div class="hero hero-collapsed fade-in" id="hero-featured" data-event-id="${featured.id}" onclick="toggleHeroExpand(event, '${featured.id}')">
+    <div class="hero hero-collapsed fade-in" id="hero-featured" onclick="toggleHeroExpand(event)" role="button" tabindex="0" aria-label="Expandir o contraer tarjeta">
       <div class="hero-media-wrap">
         ${(featured.coverImage && featured.coverImage.startsWith && featured.coverImage.startsWith('http')) ? '<img class="hero-img" src="' + window.ApiClient.sanitizeHTML(featured.coverImage) + '" alt="">' : '<div class="hero-placeholder star-bg">🌌</div>'}
         <span class="hero-toggle-label">Toca para expandir / contraer</span>
@@ -308,12 +308,9 @@ async function renderHome(prependEvents) {
         <span class="badge badge-primary" style="margin-bottom:0.5rem">Evento Destacado</span>
         <h2 class="hero-title">${window.ApiClient.sanitizeHTML(featured.title)}</h2>
         <p class="hero-sub">${new Date(featured.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} • ${window.ApiClient.sanitizeHTML(featured.venue || 'Venue')}</p>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1rem">
-          <div class="avatar-row">
-            ${featured ? featured.title.substring(0, 3).split('').map((c,i) => `<div class="avatar" style="background:hsl(${280+i*30},60%,40%);font-size:0.7rem;display:flex;align-items:center;justify-content:center">${c}</div>`).join('') : ''}
-            <div class="avatar avatar-count">+${Math.max(0, (featured ? featured.title.length : 0) - 3)}</div>
-          </div>
-          <button class="btn btn-primary" style="padding:0.6rem 1.2rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('tickets','${featured.id}')">🎫 Entradas</button>
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:0.5rem;margin-top:1rem;flex-wrap:wrap">
+          <button type="button" class="btn btn-outline" style="padding:0.6rem 1rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('event-detail','${featured.id}')">Ver detalle</button>
+          <button type="button" class="btn btn-primary" style="padding:0.6rem 1.2rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('tickets','${featured.id}')">🎫 Entradas</button>
         </div>
       </div>
     </div>` : ''}
@@ -348,40 +345,67 @@ async function renderHome(prependEvents) {
       <button class="icon-btn" onclick="toast('▶️ Reproduciendo...')">▶️</button>
     </div>
   `;
-  
+
+    setupAccordionEventCards(content);
   } catch (error) {
     console.error('Error loading home:', error);
     showErrorState(content, 'Error al cargar eventos', 'renderHome');
   }
 }
 
+function setupAccordionEventCards(container) {
+  if (!container) return;
+  container.onclick = function (ev) {
+    var card = ev.target.closest && ev.target.closest('.event-card-accordion');
+    if (!card) return;
+    if (ev.target.closest && (ev.target.closest('button') || ev.target.closest('a'))) return;
+    ev.preventDefault();
+    var expanded = card.classList.contains('expanded');
+    container.querySelectorAll('.event-card-accordion').forEach(function (c) { c.classList.remove('expanded'); });
+    if (!expanded) card.classList.add('expanded');
+  };
+}
+
 function isImageUrl(url) {
   return typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'));
 }
-function toggleHeroExpand(ev, eventId) {
-  if (ev.target.closest && ev.target.closest('.hero-content')) {
-    navigate('event-detail', eventId);
-    return;
-  }
+function toggleHeroExpand(ev) {
+  if (ev.target.closest && (ev.target.closest('button') || ev.target.closest('a'))) return;
+  ev.preventDefault();
   var hero = document.getElementById('hero-featured');
   if (hero) hero.classList.toggle('hero-collapsed');
 }
 
 function renderEventCardMini(e) {
   var safeId = (e.id || '').replace(/'/g, "\\'");
+  var thumbBlock = isImageUrl(e.coverImage)
+    ? '<img src="' + e.coverImage.replace(/"/g, '&quot;') + '" alt="">'
+    : '🌌';
   var imgBlock = isImageUrl(e.coverImage)
     ? '<img class="event-card-img" src="' + e.coverImage.replace(/"/g, '&quot;') + '" alt="">'
     : '<div class="event-img-placeholder star-bg">🌌</div>';
+  var dateStr = new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
   return `
-    <div class="event-card" onclick="navigate('event-detail', '${safeId}')">
-      <div class="event-card-img-wrap">${imgBlock}</div>
-      <div class="event-body">
-        <div class="event-meta">
-          <div><div class="event-name">${e.title}</div><div class="event-venue">${e.venue}</div></div>
-          <div class="event-date-badge"><div class="event-date-month">${new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short' }).toUpperCase()}</div><div class="event-date-day">${new Date(e.startAt).getDate()}</div></div>
+    <div class="event-card event-card-accordion" data-event-id="${safeId}">
+      <div class="event-card-collapsed">
+        <div class="event-card-thumb">${thumbBlock}</div>
+        <div class="event-card-collapsed-info">
+          <div class="event-name">${(e.title || '').replace(/</g, '&lt;')}</div>
+          <div class="event-venue">${dateStr} • ${(e.venue || '').replace(/</g, '&lt;')}</div>
         </div>
-        ${e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date()) ? '<span class="badge badge-live" style="margin-top:0.5rem">🔴 LIVE</span>' : ''}
-        <div class="event-lineup">� ${e.city || e.venue}</div>
+      </div>
+      <div class="event-card-expanded-wrap">
+        <div class="event-image">${imgBlock}</div>
+        <div class="event-body" style="padding:0.75rem 1rem">
+          <div class="event-meta">
+            <div><div class="event-name">${(e.title || '').replace(/</g, '&lt;')}</div><div class="event-venue">${(e.venue || '').replace(/</g, '&lt;')}</div></div>
+            <div class="event-date-badge"><div class="event-date-month">${new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short' }).toUpperCase()}</div><div class="event-date-day">${new Date(e.startAt).getDate()}</div></div>
+          </div>
+          <div class="event-actions">
+            <button type="button" class="btn btn-outline" style="padding:0.5rem 0.9rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('event-detail','${safeId}')">Ver detalle</button>
+            <button type="button" class="btn btn-primary" style="padding:0.5rem 0.9rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('tickets','${safeId}')">🎫 Entradas</button>
+          </div>
+        </div>
       </div>
     </div>`;
 }
