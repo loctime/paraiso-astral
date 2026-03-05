@@ -326,12 +326,59 @@ label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bo
 }
 
 /* ===== EVENT DETAIL HERO CARD (overlay on image) ===== */
+.event-detail-hero-wrap {
+  position: relative;
+  margin-bottom: 1.2rem;
+}
+.event-detail-hero-glow {
+  --event-detail-glow-color: 209, 37, 244;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 180%;
+  max-width: 160vw;
+  height: 140%;
+  min-height: 420px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.7s ease;
+  background: radial-gradient(
+    ellipse 75% 60% at 50% 35%,
+    rgba(var(--event-detail-glow-color), 0.55) 0%,
+    rgba(var(--event-detail-glow-color), 0.28) 40%,
+    rgba(var(--event-detail-glow-color), 0.1) 65%,
+    transparent 85%
+  );
+  filter: blur(56px);
+}
+.event-detail-hero-glow--on {
+  opacity: 1;
+}
+
+/* Page de detalle del evento: fondo teñido por el color dominante */
+#page-event-detail.event-detail-page--themed {
+  --event-detail-dominant: 209, 37, 244;
+  background: 
+    radial-gradient(
+      ellipse 100% 80% at 50% 0%,
+      rgba(var(--event-detail-dominant), 0.22) 0%,
+      rgba(var(--event-detail-dominant), 0.08) 45%,
+      transparent 70%
+    ),
+    var(--bg-dark);
+  min-height: 100%;
+}
+#page-event-detail.event-detail-page--themed .page-content {
+  background: transparent;
+}
 .event-detail-hero {
+  position: relative;
+  z-index: 1;
   border-radius: var(--radius-xl);
   overflow: hidden;
-  position: relative;
   min-height: 320px;
-  margin-bottom: 1.2rem;
   border: 1px solid var(--border);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
   transition: transform 0.25s ease, box-shadow 0.25s ease;

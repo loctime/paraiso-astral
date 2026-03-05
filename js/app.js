@@ -617,6 +617,60 @@ function renderEventCardFull(e) {
     </div>`;
 }
 
+// ── EVENT DETAIL (dominant color glow) ────────────────────────────────────────
+var EVENT_DETAIL_DEFAULT_GLOW = '209, 37, 244'; // theme primary RGB for fallback
+
+/**
+ * Extract a dominant/vibrant color from an image via canvas. Returns rgb(r,g,b) or null on failure.
+ */
+function getDominantColorFromImage(img) {
+  try {
+    if (!img || !img.complete || img.naturalWidth === 0) return null;
+    var canvas = document.createElement('canvas');
+    var size = 48;
+    canvas.width = size;
+    canvas.height = size;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, size, size);
+    var data = ctx.getImageData(0, 0, size, size).data;
+    var r = 0, g = 0, b = 0, count = 0;
+    var bestS = 0, bestR = 0, bestG = 0, bestB = 0;
+    for (var i = 0; i < data.length; i += 4) {
+      var pr = data[i], pg = data[i + 1], pb = data[i + 2];
+      var max = Math.max(pr, pg, pb), min = Math.min(pr, pg, pb);
+      var l = (max + min) / 2 / 255;
+      if (l < 0.15 || l > 0.92) continue;
+      r += pr; g += pg; b += pb; count++;
+      var s = max === min ? 0 : (max - min) / (l < 0.5 ? max + min : 2 - max - min);
+      if (s > bestS) { bestS = s; bestR = pr; bestG = pg; bestB = pb; }
+    }
+    if (count > 0 && bestS < 0.1) {
+      return Math.round(r / count) + ', ' + Math.round(g / count) + ', ' + Math.round(b / count);
+    }
+    if (bestS >= 0.1) return bestR + ', ' + bestG + ', ' + bestB;
+    if (count > 0) return Math.round(r / count) + ', ' + Math.round(g / count) + ', ' + Math.round(b / count);
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function applyEventDetailGlow(content, rgbString) {
+  var color = rgbString || EVENT_DETAIL_DEFAULT_GLOW;
+  var page = content && content.closest && content.closest('.page');
+  if (page) {
+    page.style.setProperty('--event-detail-dominant', color);
+    page.classList.add('event-detail-page--themed');
+  }
+  var wrap = content && content.querySelector('.event-detail-hero-wrap');
+  var glow = wrap && wrap.querySelector('.event-detail-hero-glow');
+  if (glow) {
+    glow.style.setProperty('--event-detail-glow-color', color);
+    glow.classList.add('event-detail-hero-glow--on');
+  }
+}
+
 // ── EVENT DETAIL ─────────────────────────────────────────────────────────────
 async function renderEventDetail(eventId) {
   const el = document.getElementById('page-event-detail');
@@ -673,7 +727,7 @@ async function renderEventDetail(eventId) {
     const pct = 0; // No capacity data available in new schema
 
     var heroBg = isImageUrl(e.coverImage)
-      ? '<img class="event-detail-hero__bg" src="' + e.coverImage.replace(/"/g, '&quot;') + '" alt="">'
+      ? '<img class="event-detail-hero__bg" src="' + e.coverImage.replace(/"/g, '&quot;') + '" alt="" crossorigin="anonymous">'
       : '<div class="event-detail-hero__bg-placeholder">🌌</div>';
     var heroBadge = e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date())
       ? '<span class="badge badge-live event-detail-hero__badge">🔴 LIVE</span>'
@@ -685,17 +739,20 @@ async function renderEventDetail(eventId) {
     var editEventBtn = canEdit ? '<button type="button" class="btn btn-outline btn-full" style="margin-top:0.5rem" onclick="openEditEventModal(\'' + e.id.replace(/'/g, "\\'") + '\')">✏️ Editar evento</button>' : '';
     content.innerHTML = `
     <button onclick="navigate('` + returnTo + `')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
-    <div class="event-detail-hero">
-      ${heroBg}
-      <div class="event-detail-hero__overlay"></div>
-      ${heroBadge}
-      <div class="event-detail-hero__content">
-        <h1 class="event-detail-hero__title">${(e.title || '').replace(/</g, '&lt;')}</h1>
-        <div class="event-detail-hero__subtitle">${(e.venue || 'Lugar').replace(/</g, '&lt;')}</div>
-        <div class="event-detail-hero__meta">
-          <span>${metaDate}</span>
-          <span>${metaTime}</span>
-          <span>${(e.status || '').replace(/</g, '&lt;')}</span>
+    <div class="event-detail-hero-wrap">
+      <div class="event-detail-hero-glow" aria-hidden="true"></div>
+      <div class="event-detail-hero">
+        ${heroBg}
+        <div class="event-detail-hero__overlay"></div>
+        ${heroBadge}
+        <div class="event-detail-hero__content">
+          <h1 class="event-detail-hero__title">${(e.title || '').replace(/</g, '&lt;')}</h1>
+          <div class="event-detail-hero__subtitle">${(e.venue || 'Lugar').replace(/</g, '&lt;')}</div>
+          <div class="event-detail-hero__meta">
+            <span>${metaDate}</span>
+            <span>${metaTime}</span>
+            <span>${(e.status || '').replace(/</g, '&lt;')}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -746,6 +803,17 @@ async function renderEventDetail(eventId) {
       ${editEventBtn}
     </div>
   `;
+
+    applyEventDetailGlow(content, null);
+    var heroImg = content.querySelector('.event-detail-hero__bg');
+    if (heroImg && heroImg.tagName === 'IMG') {
+      function applyGlowFromImage() {
+        var rgb = getDominantColorFromImage(heroImg);
+        applyEventDetailGlow(content, rgb);
+      }
+      heroImg.addEventListener('load', applyGlowFromImage);
+      if (heroImg.complete) applyGlowFromImage();
+    }
     
   } catch (error) {
     console.error('Error loading event detail:', error);
