@@ -1,0 +1,14 @@
+{
+  "name": "paraiso-astral-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static frontend + one-off admin scripts for Paraíso Astral",
+  "scripts": {
+    "env": "node scripts/generate-env.js",
+    "set-admin": "node scripts/set-admin.js",
+    "serve": "python -m http.server 8787"
+  },
+  "devDependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}
