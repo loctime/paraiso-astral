@@ -1,276 +1,101 @@
-// ===== SERVICE WORKER AVANZADO - PARAÍSO ASTRAL =====
+// ===== SERVICE WORKER - PARAÍSO ASTRAL =====
+// Minimal service worker. Precachea el app shell y usa network-first para HTML
+// (así los cambios se ven rápido) + cache-first para CSS/JS (para que la primera
+// carga offline funcione).
+//
+// NOTA: Esta SW existe pero NO se registra desde index.html por ahora. Si querés
+// habilitar PWA/offline real, agregá esto al final de app.js:
+//   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 
-const CACHE_NAME = 'paraiso-astral-v3';
-const APP_SHELL_CACHE = 'paraiso-shell-v3';
-const RUNTIME_CACHE = 'paraiso-runtime-v3';
+const CACHE_VERSION = 'v4';
+const APP_SHELL_CACHE = 'paraiso-shell-' + CACHE_VERSION;
+const RUNTIME_CACHE = 'paraiso-runtime-' + CACHE_VERSION;
 
-// App Shell - archivos críticos que siempre deben estar disponibles
+// App Shell — archivos estáticos siempre disponibles offline.
 const APP_SHELL_FILES = [
   '/',
   '/index.html',
+  '/manifest.json',
   '/styles/base.css',
-  '/styles/theme.css', 
+  '/styles/theme.css',
   '/styles/components.css',
-  '/js/app.js',
-  '/js/db.js',
-  '/manifest.json'
+  '/js/config.js',
+  '/js/firebase.js',
+  '/js/auth.js',
+  '/js/firestoreClient.js',
+  '/js/cloudinaryClient.js',
+  '/js/dataSource.js',
+  '/js/app.js'
 ];
 
-// Archivos que pueden cachearse dinámicamente
-const CACHEABLE_ROUTES = [
-  '/events',
-  '/artists', 
-  '/news',
-  '/tickets'
-];
-
-// Estrategias de cacheo
-const CACHE_STRATEGIES = {
-  // App Shell: Cache First (siempre desde cache)
-  appShell: (request) => {
-    return caches.match(request).then(response => {
-      return response || fetch(request);
-    });
-  },
-
-  // API: Stale While Revalidate (cache primero, luego actualizar)
-  staleWhileRevalidate: (request) => {
-    return caches.match(request).then(response => {
-      const fetchPromise = fetch(request).then(fetchResponse => {
-        if (fetchResponse.ok) {
-          caches.open(RUNTIME_CACHE).then(cache => {
-            cache.put(request, fetchResponse.clone());
-          });
-        }
-        return fetchResponse;
-      });
-      return response || fetchPromise;
-    });
-  },
-
-  // Imágenes: Cache First con expiración
-  cacheFirst: (request) => {
-    return caches.match(request).then(response => {
-      if (response) {
-        // Verificar si la respuesta no está muy antigua (24 horas)
-        const dateHeader = response.headers.get('date');
-        if (dateHeader) {
-          const responseDate = new Date(dateHeader);
-          const now = new Date();
-          const hoursDiff = (now - responseDate) / (1000 * 60 * 60);
-          
-          if (hoursDiff < 24) {
-            return response;
-          }
-        }
-      }
-      
-      return fetch(request).then(fetchResponse => {
-        if (fetchResponse.ok) {
-          caches.open(RUNTIME_CACHE).then(cache => {
-            cache.put(request, fetchResponse.clone());
-          });
-        }
-        return fetchResponse;
-      });
-    });
-  },
-
-  // Network First para datos críticos
-  networkFirst: (request) => {
-    return fetch(request).then(fetchResponse => {
-      if (fetchResponse.ok) {
-        caches.open(RUNTIME_CACHE).then(cache => {
-          cache.put(request, fetchResponse.clone());
-        });
-      }
-      return fetchResponse;
-    }).catch(() => {
-      return caches.match(request);
-    });
-  }
-};
-
-// Instalación - precache del App Shell
-self.addEventListener('install', event => {
+// Install: precache del app shell.
+self.addEventListener('install', function (event) {
   event.waitUntil(
-    Promise.all([
-      // Cache del App Shell
-      caches.open(APP_SHELL_CACHE).then(cache => {
-        return cache.addAll(APP_SHELL_FILES);
-      }),
-      
-      // Cache inicial de datos estáticos
-      caches.open(CACHE_NAME).then(cache => {
-        return cache.addAll([
-          '/js/db.js'
-        ]);
-      })
-    ])
+    caches.open(APP_SHELL_CACHE)
+      .then(function (cache) { return cache.addAll(APP_SHELL_FILES); })
+      .then(function () { return self.skipWaiting(); })
   );
-  
-  // Forzar activación inmediata
-  self.skipWaiting();
 });
 
-// Activación - limpiar caches antiguos
-self.addEventListener('activate', event => {
+// Activate: limpiar caches viejos.
+self.addEventListener('activate', function (event) {
   event.waitUntil(
-    Promise.all([
-      // Liminar caches antiguos
-      caches.keys().then(keys => {
+    caches.keys()
+      .then(function (keys) {
         return Promise.all(
-          keys.filter(key => 
-            key !== CACHE_NAME && 
-            key !== APP_SHELL_CACHE && 
-            key !== RUNTIME_CACHE
-          ).map(key => caches.delete(key))
+          keys
+            .filter(function (k) { return k !== APP_SHELL_CACHE && k !== RUNTIME_CACHE; })
+            .map(function (k) { return caches.delete(k); })
         );
       })
-    ])
+      .then(function () { return self.clients.claim(); })
   );
 });
 
-// Fetch - manejo de solicitudes
-self.addEventListener('fetch', event => {
-  const { request } = event;
-  const url = new URL(request.url);
+// Fetch: estrategia por tipo.
+self.addEventListener('fetch', function (event) {
+  var request = event.request;
+  var url = new URL(request.url);
 
-  // Solo manejar solicitudes HTTP(S) de nuestro origen
-  if (!request.url.startsWith(self.location.origin)) {
+  // Solo manejamos GET del mismo origen.
+  if (request.method !== 'GET' || url.origin !== self.location.origin) {
     return;
   }
 
-  // Determinar estrategia basada en el tipo de solicitud
-  let strategy;
-  
-  if (APP_SHELL_FILES.includes(url.pathname) || 
-      url.pathname === '/' || 
-      url.pathname.endsWith('.html')) {
-    // App Shell - Cache First
-    strategy = CACHE_STRATEGIES.appShell;
-  } 
-  else if (url.pathname.startsWith('/js/') || 
-           url.pathname.startsWith('/styles/')) {
-    // Recursos estáticos - Cache First
-    strategy = CACHE_STRATEGIES.cacheFirst;
-  }
-  else if (request.method === 'GET' && 
-           (CACHEABLE_ROUTES.some(route => url.pathname.startsWith(route)) ||
-            url.pathname.includes('/events/') ||
-            url.pathname.includes('/artists/') ||
-            url.pathname.includes('/news/'))) {
-    // Rutas de la app - Stale While Revalidate
-    strategy = CACHE_STRATEGIES.staleWhileRevalidate;
-  }
-  else if (url.pathname.includes('/admin') || 
-           url.pathname.includes('/profile')) {
-    // Rutas sensibles - Network First
-    strategy = CACHE_STRATEGIES.networkFirst;
-  }
-  else {
-    // Por defecto - Network First
-    strategy = CACHE_STRATEGIES.networkFirst;
-  }
-
-  event.respondWith(strategy(request));
-});
-
-// Manejo de errores y fallbacks
-self.addEventListener('fetch', event => {
-  const { request } = event;
-  
-  event.respondWith(
-    fetch(request)
-      .catch(() => {
-        // Fallback para cuando no hay conexión
-        if (request.mode === 'navigate') {
-          // Para navegación, servir el index.html
-          return caches.match('/index.html');
-        }
-        
-        // Para otros recursos, intentar caché
-        return caches.match(request);
-      })
-  );
-});
-
-// Background Sync para sincronización cuando vuelve la conexión
-self.addEventListener('sync', event => {
-  if (event.tag === 'sync-data') {
-    event.waitUntil(syncData());
-  }
-});
-
-// Función de sincronización de datos
-async function syncData() {
-  try {
-    // Aquí iría la lógica para sincronizar datos pendientes
-    // Por ejemplo: ventas offline, cambios en perfil, etc.
-    console.log('Sincronizando datos pendientes...');
-  } catch (error) {
-    console.error('Error en sincronización:', error);
-  }
-}
-
-// Push notifications (preparado para futuro VAPID)
-self.addEventListener('push', event => {
-  if (!event.data) return;
-  
-  const data = event.data.json();
-  const options = {
-    body: data.body,
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
-    vibrate: [100, 50, 100],
-    data: {
-      dateOfArrival: Date.now(),
-      primaryKey: 1
-    },
-    actions: [
-      {
-        action: 'explore',
-        title: 'Ver detalles',
-        icon: '/icons/icon-192.png'
-      },
-      {
-        action: 'close',
-        title: 'Cerrar',
-        icon: '/icons/icon-192.png'
-      }
-    ]
-  };
-  
-  event.waitUntil(
-    self.registration.showNotification(data.title, options)
-  );
-});
-
-// Manejo de clicks en notificaciones
-self.addEventListener('notificationclick', event => {
-  event.notification.close();
-  
-  if (event.action === 'explore') {
-    // Abrir la app en la página relevante
-    event.waitUntil(
-      clients.openWindow('/')
+  // Navegación / HTML → network-first con fallback a cache (y a /index.html).
+  if (request.mode === 'navigate' || (request.headers.get('accept') || '').indexOf('text/html') !== -1) {
+    event.respondWith(
+      fetch(request)
+        .then(function (res) {
+          var copy = res.clone();
+          caches.open(RUNTIME_CACHE).then(function (cache) { cache.put(request, copy); });
+          return res;
+        })
+        .catch(function () {
+          return caches.match(request).then(function (cached) {
+            return cached || caches.match('/index.html');
+          });
+        })
     );
+    return;
   }
-});
 
-// Periodic Sync para actualizaciones automáticas
-self.addEventListener('periodicsync', event => {
-  if (event.tag === 'sync-events') {
-    event.waitUntil(updateEventsData());
+  // CSS / JS / imágenes locales → cache-first.
+  if (url.pathname.startsWith('/styles/') || url.pathname.startsWith('/js/') || url.pathname.startsWith('/icons/')) {
+    event.respondWith(
+      caches.match(request).then(function (cached) {
+        if (cached) return cached;
+        return fetch(request).then(function (res) {
+          if (res && res.ok) {
+            var copy = res.clone();
+            caches.open(RUNTIME_CACHE).then(function (cache) { cache.put(request, copy); });
+          }
+          return res;
+        });
+      })
+    );
+    return;
   }
-});
 
-// Actualizar datos de eventos periódicamente
-async function updateEventsData() {
-  try {
-    // Aquí iría la lógica para actualizar datos de eventos
-    console.log('Actualizando datos de eventos...');
-  } catch (error) {
-    console.error('Error actualizando eventos:', error);
-  }
-}
+  // Resto (Firestore, Cloudinary, Firebase SDKs) → network directo, sin cachear.
+});

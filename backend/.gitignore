@@ -94,7 +94,7 @@ Thumbs.db
 # Prisma
 # prisma/migrations/
 
-
+paraiso-astral-serviceAccount.json
 # Database
 *.sqlite
 *.sqlite3

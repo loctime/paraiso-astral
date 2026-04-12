@@ -1,10 +1,8 @@
 // ===== PARAÍSO ASTRAL - APP.JS =====
 
-// Estado global: solo usuario (GET /api/me) y UI de tickets. Sin DATABASE ni Firestore.
+// Estado global: solo usuario logueado (si lo hay).
 var AppState = {
-  currentUser: null,
-  selectedEventId: null,
-  selectedTicketType: 'general'
+  currentUser: null
 };
 window.AppState = AppState;
 var pendingReturnTo = null;
@@ -73,8 +71,6 @@ function navigate(pageId, data) {
   if (data) {
     if (pageId === 'event-detail') { renderEventDetail(data); }
     if (pageId === 'artist-detail') { renderArtistDetail(data); }
-    if (pageId === 'rrpp-detail') { renderRRPPDetail(data); }
-    if (pageId === 'tickets') { renderTicketsPage(data); }
   }
   
   // Render page content based on pageId
@@ -103,17 +99,22 @@ function handleAppError(message, type) {
  * Initialize error handling
  */
 function initializeErrorHandling() {
-  if (window.ApiClient && window.ApiClient.setErrorHandler) {
-    window.ApiClient.setErrorHandler(handleAppError);
-  }
   window.addEventListener('unhandledrejection', function (event) {
     console.error('Unhandled promise rejection:', event.reason);
-    handleAppError('Error inesperado en la aplicación', 'error');
   });
   window.addEventListener('error', function (event) {
     console.error('Global error:', event.error);
-    handleAppError('Error inesperado en la aplicación', 'error');
   });
+}
+
+// Helper global para escapar HTML (reemplaza el antiguo ApiClient.sanitizeHTML).
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // ── LOADING STATES ──────────────────────────────────────────────────────────────────
@@ -221,16 +222,9 @@ function handleInitialRoute() {
  * Setup form listeners
  */
 function setupFormListeners() {
-  // Login form
   const loginForm = document.getElementById('login-form');
   if (loginForm) {
     loginForm.addEventListener('submit', handleLogin);
-  }
-  
-  // Register form
-  const registerForm = document.getElementById('register-form');
-  if (registerForm) {
-    registerForm.addEventListener('submit', handleRegister);
   }
 }
 
@@ -274,9 +268,7 @@ async function renderHome() {
     const nextEvents = upcoming.slice(featured ? 1 : 0, featured ? 5 : 4);
     const topArtists = artists.slice(0, 6);
 
-    const safe = (window.ApiClient && window.ApiClient.sanitizeHTML)
-      ? window.ApiClient.sanitizeHTML
-      : function (s) { return String(s == null ? '' : s).replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+    const safe = escapeHtml;
 
     const heroStyle = cfg.heroImage
       ? 'background-image:linear-gradient(180deg,rgba(10,0,20,0.35),rgba(10,0,20,0.85)),url(' + String(cfg.heroImage).replace(/"/g, '') + ');background-size:cover;background-position:center'
@@ -396,16 +388,12 @@ function renderEventCompactCard(e) {
   var title = (e.title || '').replace(/</g, '&lt;');
   var venue = (e.venue || '').replace(/</g, '&lt;');
   var date = new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
-  var editBtn = (window.AppState && window.AppState.currentUser)
-    ? '<button type="button" class="btn btn-ghost event-compact-btn-editar" style="font-size:0.75rem;padding:0.35rem 0.5rem" onclick="event.stopPropagation();openEditEventModal(\'' + safeId + '\')">✏️ Editar</button>'
-    : '';
   return '<div class="event-compact-card">'
     + '<div class="event-compact-thumb">' + thumb + '</div>'
     + '<div class="event-compact-info">'
     + '<div class="event-compact-name">' + title + '</div>'
     + '<div class="event-compact-meta">' + date + ' · ' + venue + '</div>'
     + '<div class="event-compact-actions">'
-    + editBtn
     + '<button type="button" class="btn btn-primary event-compact-btn-vermas" onclick="navigate(\'event-detail\',\'' + safeId + '\')">Ver más</button>'
     + '</div></div></div>';
 }
@@ -436,7 +424,6 @@ function renderEventCardMini(e) {
             <div class="event-date-badge"><div class="event-date-month">${new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short' }).toUpperCase()}</div><div class="event-date-day">${new Date(e.startAt).getDate()}</div></div>
           </div>
           <div class="event-actions">
-            ${(window.AppState && window.AppState.currentUser) ? '<button type="button" class="btn btn-ghost" style="padding:0.5rem 0.9rem;font-size:0.8rem" onclick="event.stopPropagation();openEditEventModal(\'' + safeId + '\')">✏️ Editar</button>' : ''}
             <button type="button" class="btn btn-primary" style="padding:0.5rem 0.9rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('event-detail','${safeId}')">Ver detalle</button>
           </div>
         </div>
@@ -533,12 +520,10 @@ function renderCalendar() {
 }
 
 function changeCalMonth(dir) {
-  // Simplified month change without DATABASE dependency
   renderEvents();
 }
 
 function filterEventsByDay(day) {
-  // Simplified day filtering without DATABASE dependency
   renderEvents();
 }
 
@@ -546,40 +531,6 @@ function filterEvents(query) {
   // This will be implemented with real API filtering
   // For now, just re-render events
   renderEvents();
-}
-
-// ===== RBAC TEST FUNCTION =====
-
-/**
- * Test protected RBAC endpoint
- */
-async function testRBAC() {
-  try {
-    toast('🔄 Probando endpoint protegido...');
-    
-    // Test with a sample organization ID (you may need to adjust this)
-    const orgId = 'sample-org-id';
-    
-    const result = await window.ApiClient.get(`/api/orgs/${orgId}/test`);
-    
-    toast('✅ Acceso concedido a endpoint protegido');
-    
-    // Show result in a modal or alert
-    alert(`RBAC Test Exitoso:\n\nUsuario: ${result.user?.email || 'N/A'}\nOrganización: ${result.organization?.name || 'N/A'}\nRol: ${result.membership?.role || 'N/A'}`);
-    
-  } catch (error) {
-    console.error('RBAC Test Error:', error);
-    toast('❌ Error al acceder a endpoint protegido');
-    
-    if (error.status === 401) {
-      toast('🔐 No autorizado - Redirigiendo a login...');
-      navigate('login');
-    } else if (error.status === 403) {
-      alert('Acceso denegado: No tienes los permisos necesarios para esta organización');
-    } else {
-      alert(`Error: ${error.message || 'Error desconocido'}`);
-    }
-  }
 }
 
 function renderEventCardFull(e) {
@@ -602,11 +553,9 @@ function renderEventCardFull(e) {
           <div class="event-date-badge"><div class="event-date-month">${new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short' }).toUpperCase()}</div><div class="event-date-day">${new Date(e.startAt).getDate()}</div></div>
         </div>
         <div class="event-lineup" style="margin-top:0.5rem">🕐 ${new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
-        <div class="event-lineup">📍 ${e.city || e.venue}</div>
+        <div class="event-lineup">📍 ${e.venue || ''}</div>
         <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap">
-          ${(window.AppState && window.AppState.currentUser) ? '<button class="btn btn-ghost" style="padding:0.6rem 0.8rem;font-size:0.78rem" onclick="event.stopPropagation();openEditEventModal(\'' + safeId + '\')">✏️ Editar</button>' : ''}
-          <button class="btn btn-primary" style="flex:1;padding:0.6rem;font-size:0.78rem;min-width:0" onclick="event.stopPropagation();navigate('tickets','${safeId}')">🎫 Comprar</button>
-          <button class="btn btn-outline" style="padding:0.6rem 0.8rem;font-size:0.78rem" onclick="event.stopPropagation();navigate('event-detail', '${safeId}')">Ver más</button>
+          <button class="btn btn-primary" style="flex:1;padding:0.6rem;font-size:0.78rem;min-width:0" onclick="event.stopPropagation();navigate('event-detail', '${safeId}')">Ver detalle</button>
         </div>
       </div>
     </div>`;
@@ -759,9 +708,9 @@ async function renderEventDetail(eventId) {
       : '<span class="badge badge-primary event-detail-hero__badge">' + new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' }) + '</span>';
     var metaDate = new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
     var metaTime = new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-    var canEdit = e.canEdit === true;
-    var editImageBtn = canEdit ? '<button type="button" class="btn btn-ghost" style="margin-bottom:0.75rem;font-size:0.8rem" onclick="editEventCover(\'' + e.id + '\')">📷 Editar imagen</button>' : '';
-    var editEventBtn = canEdit ? '<button type="button" class="btn btn-outline btn-full" style="margin-top:0.5rem" onclick="openEditEventModal(\'' + e.id.replace(/'/g, "\\'") + '\')">✏️ Editar evento</button>' : '';
+    // Edición ahora vive en el panel admin (tab Eventos). Sin botones de edit inline.
+    var editImageBtn = '';
+    var editEventBtn = '';
     content.innerHTML = `
     <button onclick="navigate('` + returnTo + `')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
     <div class="event-detail-hero-wrap">
@@ -849,35 +798,12 @@ async function renderEventDetail(eventId) {
   }
 }
 
-function editEventCover(eventId) {
-  var input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/jpeg,image/png,image/webp,image/gif';
-  input.style.display = 'none';
-  document.body.appendChild(input);
-  input.onchange = function () {
-    var file = input.files && input.files[0];
-    if (!file) return;
-    input.remove();
-    toast('Subiendo imagen…');
-    window.ApiClient.uploadFile('/api/upload/event-cover', file).then(function (r) {
-      return window.ApiClient.request('/api/events/' + eventId, { method: 'PATCH', body: { coverImage: r.url } });
-    }).then(function () {
-      toast('Imagen actualizada.');
-      renderEventDetail(eventId);
-    }).catch(function (err) {
-      toast('❌ ' + (err.message || 'Error al actualizar'));
-    });
-  };
-  input.click();
-}
-
 function shareEvent(id) {
-  // Simplified share function without DATABASE dependency
+  const url = window.location.href;
   if (navigator.share) {
-    navigator.share({ title: 'Paraíso Astral Event', text: '¡Mira este evento increíble!', url: window.location.href });
-  } else {
-    navigator.clipboard.writeText('¡Mira este evento de Paraíso Astral!').then(() => toast('📋 Copiado al portapapeles!'));
+    navigator.share({ title: 'Paraíso Astral', text: 'Mirá este evento', url: url }).catch(function () {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(function () { toast('📋 Link copiado'); });
   }
 }
 
@@ -1127,186 +1053,6 @@ async function renderContact() {
         <div class="empty-title">Error al cargar contacto</div>
       </div>`;
   }
-}
-
-// ── TICKETS PAGE ──────────────────────────────────────────────────────────────
-// Evento desde backend GET /api/events (skipAuth). Sin DATABASE.
-async function renderTicketsPage(eventId) {
-  AppState.selectedEventId = eventId;
-  var el = document.getElementById('page-tickets');
-  var content = el.querySelector('.page-content');
-  content.innerHTML = renderPortalLoader('Sincronizando accesos...');
-
-  try {
-    var res = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
-    var events = res.data || [];
-    var e = events.find(function (x) { return String(x.id) === String(eventId); }) || events[0];
-    if (!e) {
-      content.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Evento no encontrado</div><button class="btn btn-primary" style="margin-top:1rem" onclick="navigate(\'events\')">← Eventos</button></div>';
-      return;
-    }
-    var sel = AppState.selectedTicketType;
-    content.innerHTML = ''
-      + '<button onclick="navigate(\'events\')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Eventos</button>'
-      + '<div style="border-radius:var(--radius-xl);overflow:hidden;border:1px solid var(--border);margin-bottom:1.5rem">'
-      + '<div style="height:160px;background:linear-gradient(135deg,#1a0820,#3d0055);display:flex;align-items:center;justify-content:center;font-size:5rem;position:relative">'
-      + (e.coverImage || '🌌')
-      + '<span class="badge badge-primary" style="position:absolute;top:0.75rem;left:0.75rem">Evento</span></div>'
-      + '<div style="padding:1rem"><h2 style="font-size:1.3rem;font-weight:900">' + (e.title || '') + '</h2>'
-      + '<div style="color:var(--text-muted);font-size:0.85rem;margin-top:0.3rem">📅 ' + (e.startAt ? new Date(e.startAt).toLocaleDateString('es-ES') : '') + '</div>'
-      + '<div style="color:var(--primary);font-size:0.85rem;font-weight:600">📍 ' + (e.venue || '') + '</div></div></div>'
-      + '<h3 style="font-family:var(--font-display);font-size:0.85rem;font-weight:700;margin-bottom:1rem">Seleccionar Tipo de Acceso</h3>'
-      + [
-        { type: 'general', label: 'Acceso General', desc: 'Acceso completo', price: 45, avail: 'Disponible', remaining: 500 },
-        { type: 'vip', label: 'VIP Astral Pass ✦', desc: 'VIP lounge & Fast track', price: 120, avail: 'Limitado', remaining: 200 },
-        { type: 'backstage', label: 'Backstage Pass 👑', desc: 'Meet & greet artistas', price: 200, avail: 'Exclusivo', remaining: 50 }
-      ].map(function (t) {
-        return '<div class="ticket ' + (sel === t.type ? 'selected' : '') + '" onclick="selectTicket(\'' + t.type + '\')" style="margin-bottom:0.75rem">'
-          + '<div class="ticket-inner"><div><div style="font-weight:800;font-size:1rem">' + t.label + '</div>'
-          + '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem">' + t.desc + '</div>'
-          + '<div style="font-size:0.7rem;margin-top:0.3rem;color:var(--green)">' + t.remaining + ' disponibles</div></div>'
-          + '<div style="text-align:right"><div style="color:var(--primary);font-family:var(--font-display);font-size:1.1rem;font-weight:700">$' + t.price + '</div>'
-          + '<div style="font-size:0.65rem;text-transform:uppercase;font-weight:700;color:var(--text-muted)">' + t.avail + '</div></div></div></div>';
-      }).join('')
-      + '<div class="glass-card" style="padding:1.5rem;margin:1.5rem 0;text-align:center">'
-      + '<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.15em;color:var(--primary);font-weight:700;margin-bottom:1rem">Pase Digital de Entrada</div>'
-      + '<div style="background:white;border-radius:var(--radius-lg);padding:1rem;display:inline-block;position:relative">' + generateQR() + '</div>'
-      + '<div style="margin-top:1rem"><div style="font-family:var(--font-display);font-size:1rem;font-weight:700">AX-' + (100 + Math.floor(Math.random() * 899)) + '-PARAISO</div>'
-      + '<div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.3rem">Escanear en la puerta</div></div></div>'
-      + '<button class="btn btn-primary btn-full" style="font-size:1rem;padding:1rem" onclick="purchaseTicket(\'' + e.id + '\')">🛍️ Comprar con Seguridad</button>'
-      + '<div style="text-align:center;margin-top:0.75rem;font-size:0.75rem;color:var(--text-muted)">🔒 Pago seguro</div>';
-  } catch (err) {
-    content.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Error al cargar evento</div><button class="btn btn-primary" style="margin-top:1rem" onclick="navigate(\'events\')">← Eventos</button></div>';
-  }
-}
-
-function selectTicket(type) {
-  AppState.selectedTicketType = type;
-  if (AppState.selectedEventId) renderTicketsPage(AppState.selectedEventId);
-}
-
-function generateQR() {
-  const pattern = [1,0,1,1,0,1,0, 1,1,0,1,0,0,1, 0,1,1,0,1,1,0, 1,0,0,1,1,0,1, 0,1,0,1,0,1,1, 1,1,1,0,0,1,0, 0,1,1,0,1,0,1];
-  return `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;width:140px;height:140px;">
-    ${pattern.map(b => `<div style="border-radius:2px;background:${b?'#1a0820':'white'}"></div>`).join('')}
-  </div>`;
-}
-
-function purchaseTicket(eventId) {
-  openModal('modal-payment');
-}
-
-// ── PAYMENT MODAL ─────────────────────────────────────────────────────────────
-// Usa AppState.selectedEventId y selectedTicketType. Sin DATABASE.
-function renderPaymentModal() {
-  var typeMap = { general: { label: 'Acceso General', price: 45 }, vip: { label: 'VIP Astral Pass', price: 120 }, backstage: { label: 'Backstage Pass', price: 200 } };
-  var t = typeMap[AppState.selectedTicketType] || typeMap.general;
-  var modal = document.getElementById('modal-payment');
-  var title = AppState.selectedEventId ? 'Evento' : 'Entrada';
-  modal.querySelector('.bottom-sheet').innerHTML = ''
-    + '<div class="sheet-handle"></div><div class="sheet-title">💳 Finalizar Compra</div>'
-    + '<div class="glass-card" style="padding:0.75rem 1rem;margin-bottom:1.2rem;display:flex;justify-content:space-between;align-items:center">'
-    + '<div><div style="font-weight:700">' + title + '</div><div style="font-size:0.8rem;color:var(--text-muted)">' + t.label + '</div></div>'
-    + '<div style="font-family:var(--font-display);color:var(--primary);font-size:1.1rem;font-weight:700">$' + t.price + '</div></div>'
-    + '<div class="form-group"><label>Nombre completo</label><input class="input" type="text" placeholder="Tu nombre" id="pay-name" /></div>'
-    + '<div class="form-group"><label>Email</label><input class="input" type="email" placeholder="tu@email.com" id="pay-email" /></div>'
-    + '<div class="form-group"><label>Número de tarjeta</label><input class="input" type="text" placeholder="1234 5678 9012 3456" maxlength="19" /></div>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1rem">'
-    + '<div class="form-group" style="margin-bottom:0"><label>Vencimiento</label><input class="input" type="text" placeholder="MM/AA" /></div>'
-    + '<div class="form-group" style="margin-bottom:0"><label>CVV</label><input class="input" type="text" placeholder="123" maxlength="3" /></div></div>'
-    + '<button class="btn btn-primary btn-full" style="font-size:1rem;padding:1rem;margin-top:0.5rem" onclick="confirmPayment()">🔐 Confirmar Pago · $' + t.price + '</button>'
-    + '<button class="btn btn-ghost btn-full" style="margin-top:0.5rem" onclick="closeModal(\'modal-payment\')">Cancelar</button>';
-}
-
-function confirmPayment() {
-  closeModal('modal-payment');
-  toast('🎉 ¡Entrada comprada exitosamente!');
-  // Note: Payment processing would go here with real backend integration
-}
-
-// Noticias: datos locales (sin backend ni DATABASE). Sustituir por GET /api/news cuando exista.
-var NEWS_LIST = [];
-
-function renderNews() {
-  var el = document.getElementById('page-news');
-  if (!el) return;
-  var content = el.querySelector('.page-content');
-  if (!content) return;
-  content.innerHTML = '<div class="section-header"><span class="section-title">Noticias & Novedades</span></div>'
-    + '<div class="search-bar" style="margin-bottom:1rem"><span class="search-icon">🔍</span>'
-    + '<input class="input" type="text" placeholder="Buscar noticias..." id="search-news" oninput="filterNews(this.value)" /></div>'
-    + '<div id="news-list">'
-    + (NEWS_LIST.length === 0 ? '<div class="empty-state"><div class="empty-icon">📰</div><div class="empty-title">Sin noticias</div></div>' : NEWS_LIST.map(function (n) {
-      return '<div class="list-item" onclick="navigate(\'news-detail\',' + n.id + ')"><div class="list-icon" style="font-size:1.5rem">' + (n.emoji || '📰') + '</div><div class="list-body"><div style="font-size:0.6rem;color:var(--primary);text-transform:uppercase;font-weight:700">' + (n.category || '') + '</div><div class="list-title">' + (n.title || '') + '</div></div></div>';
-    }).join(''))
-    + '</div>';
-}
-
-function filterNews(q) {
-  var filtered = NEWS_LIST.filter(function (n) {
-    return (n.title && n.title.toLowerCase().indexOf((q || '').toLowerCase()) !== -1) ||
-      (n.category && n.category.toLowerCase().indexOf((q || '').toLowerCase()) !== -1);
-  });
-  var list = document.getElementById('news-list');
-  if (list) list.innerHTML = filtered.map(function (n) {
-    return '<div class="list-item" onclick="navigate(\'news-detail\',' + n.id + ')"><div class="list-icon" style="font-size:1.5rem">' + (n.emoji || '📰') + '</div><div class="list-body"><div style="font-size:0.6rem;color:var(--primary);text-transform:uppercase;font-weight:700">' + (n.category || '') + '</div><div class="list-title">' + (n.title || '') + '</div></div></div>';
-  }).join('');
-}
-
-function renderNewsDetail(newsId) {
-  var n = NEWS_LIST.find(function (x) { return x.id === newsId; });
-  var el = document.getElementById('page-news-detail');
-  var content = el.querySelector('.page-content');
-  if (!n) {
-    content.innerHTML = '<button onclick="navigate(\'news\')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Noticias</button><div class="empty-state"><div class="empty-icon">📰</div><div class="empty-title">Noticia no encontrada</div></div>';
-    return;
-  }
-  content.innerHTML = '<button onclick="navigate(\'news\')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Noticias</button>'
-    + '<div style="text-align:center;font-size:5rem;margin:1.5rem 0">' + (n.emoji || '📰') + '</div>'
-    + '<span class="badge badge-glass">' + (n.category || '') + '</span>'
-    + '<h2 style="font-size:1.4rem;font-weight:900;margin:0.75rem 0">' + (n.title || '') + '</h2>'
-    + '<div style="color:var(--text-muted);font-size:0.8rem;margin-bottom:1.2rem">📅 ' + (n.date || '') + '</div><div class="divider"></div>'
-    + '<p style="font-size:0.95rem;line-height:1.8;margin-top:1rem;color:rgba(240,230,255,0.85)">' + (n.body || '') + '</p>'
-    + '<div style="margin-top:1.5rem"><button class="btn btn-outline btn-full" onclick="toast(\'📤 Compartido!\')">📤 Compartir</button></div>';
-}
-
-// ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
-// Estado local (sin backend ni DATABASE). Sustituir por API cuando exista.
-var NOTIFICATIONS_LIST = [];
-
-function renderNotifications() {
-  var el = document.getElementById('page-notifications');
-  var content = el.querySelector('.page-content');
-  var unreadCount = NOTIFICATIONS_LIST.filter(function (n) { return n.unread; }).length;
-  content.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">'
-    + '<span style="font-size:0.8rem;color:var(--text-muted)">' + unreadCount + ' sin leer</span>'
-    + '<button class="btn btn-ghost" style="font-size:0.75rem;padding:0.3rem 0.75rem" onclick="markAllRead()">Marcar todo</button></div>'
-    + '<div id="notif-list">'
-    + (NOTIFICATIONS_LIST.length === 0 ? '<div class="empty-state"><div class="empty-icon">🔔</div><div class="empty-title">Sin notificaciones</div></div>' : NOTIFICATIONS_LIST.map(function (n) {
-      return '<div class="notif-item ' + (n.unread ? 'unread' : '') + '" onclick="markRead(' + n.id + ')">'
-        + (n.unread ? '<div class="notif-dot-badge"></div>' : '<div style="width:8px;flex-shrink:0"></div>')
-        + '<div class="notif-body"><div class="notif-text">' + (n.text || '') + '</div><div class="notif-time">' + (n.time || '') + '</div></div></div>';
-    }).join(''))
-    + '</div>';
-}
-
-function markRead(id) {
-  var n = NOTIFICATIONS_LIST.find(function (x) { return x.id === id; });
-  if (n) n.unread = false;
-  updateNotifBadge();
-  renderNotifications();
-}
-
-function markAllRead() {
-  NOTIFICATIONS_LIST.forEach(function (n) { n.unread = false; });
-  updateNotifBadge();
-  renderNotifications();
-}
-
-function updateNotifBadge() {
-  var count = NOTIFICATIONS_LIST.filter(function (n) { return n.unread; }).length;
-  var dot = document.querySelector('.notif-dot');
-  if (dot) dot.style.display = count > 0 ? 'block' : 'none';
 }
 
 // ── ADMIN PAGE ────────────────────────────────────────────────────────────────
@@ -1861,305 +1607,8 @@ async function adminSaveConfig(form) {
   renderAdmin();
 }
 
-// ── RRPP PAGE ────────────────────────────────────────────────────────────────
-// Sin backend RRPP ni DATABASE. Lista local vacía; sustituir por GET /api/rrpp cuando exista.
-var RRPP_LIST = [];
+// ===== AUTHENTICATION =====
 
-function renderRRPP() {
-  var el = document.getElementById('page-rrpp');
-  var content = el.querySelector('.page-content');
-  var totalRev = RRPP_LIST.reduce(function (s, r) { return s + (r.revenue || 0); }, 0);
-  var totalComm = RRPP_LIST.reduce(function (s, r) { return s + (r.earned || 0); }, 0);
-  var totalSold = RRPP_LIST.reduce(function (s, r) { return s + (r.sold || 0); }, 0);
-  var activeCount = RRPP_LIST.filter(function (r) { return r.active; }).length;
-
-  content.innerHTML = '<div class="stats-grid" style="margin-bottom:1.5rem">'
-    + '<div class="stat-card"><div class="stat-label">Revenue RRPP</div><div class="stat-value" style="font-size:1.1rem">$' + (totalRev / 1000).toFixed(1) + 'k</div></div>'
-    + '<div class="stat-card"><div class="stat-label">Comisiones</div><div class="stat-value" style="font-size:1.1rem;color:var(--green)">$' + totalComm.toFixed(0) + '</div></div>'
-    + '<div class="stat-card"><div class="stat-label">Entradas</div><div class="stat-value" style="font-size:1.1rem">' + totalSold + '</div></div>'
-    + '<div class="stat-card"><div class="stat-label">RRPP Activos</div><div class="stat-value" style="font-size:1.1rem">' + activeCount + '</div></div></div>'
-    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">'
-    + '<div class="section-title font-display">Equipo RRPP</div>'
-    + '<button class="btn btn-primary" style="padding:0.4rem 0.9rem;font-size:0.8rem" onclick="openModal(\'modal-add-rrpp\')">+ Agregar</button></div>'
-    + (RRPP_LIST.length === 0 ? '<div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">Sin datos RRPP</div><div style="font-size:0.85rem;color:var(--text-muted);margin-top:0.5rem">El backend puede exponer GET /api/rrpp en el futuro.</div></div>' : RRPP_LIST.map(function (r) {
-      return '<div class="rrpp-card" onclick="navigate(\'rrpp-detail\',' + r.id + ')">'
-        + '<div class="rrpp-avatar" style="opacity:' + (r.active ? 1 : 0.5) + '">' + (r.name ? r.name[0] : '?') + '</div>'
-        + '<div class="rrpp-info"><div class="rrpp-name">' + (r.name || '') + '</div>'
-        + '<div class="rrpp-stats">🎫 ' + (r.sold || 0) + ' vendidas · 📧 ' + (r.email || '') + '</div></div>'
-        + '<div class="rrpp-revenue"><div class="rrpp-amount">$' + ((r.revenue || 0) / 1000).toFixed(1) + 'k</div></div></div>';
-    }).join(''))
-    + '<div style="margin-top:1rem"><button class="btn btn-outline btn-full" onclick="exportData()">📊 Exportar reporte RRPP</button></div>';
-}
-
-function renderRRPPDetail(rrppId) {
-  var r = RRPP_LIST.find(function (x) { return x.id === rrppId; });
-  var el = document.getElementById('page-rrpp-detail');
-  var content = el.querySelector('.page-content');
-  if (!r) {
-    content.innerHTML = '<button onclick="navigate(\'rrpp\')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← RRPP</button><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">RRPP no encontrado</div></div>';
-    return;
-  }
-  content.innerHTML = '<button onclick="navigate(\'rrpp\')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← RRPP</button>'
-    + '<div style="text-align:center;margin-bottom:1.5rem"><div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6b1a8a);margin:0 auto 1rem;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700">' + (r.name ? r.name[0] : '?') + '</div>'
-    + '<h2 style="font-size:1.5rem;font-weight:900">' + (r.name || '') + '</h2><div style="color:var(--text-muted);font-size:0.85rem">' + (r.email || '') + '</div></div>'
-    + '<div class="stats-grid" style="margin-bottom:1.5rem">'
-    + '<div class="stat-card"><div class="stat-label">Revenue</div><div class="stat-value">$' + ((r.revenue || 0) / 1000).toFixed(1) + 'k</div></div>'
-    + '<div class="stat-card"><div class="stat-label">Entradas</div><div class="stat-value">' + (r.sold || 0) + '</div></div></div>';
-}
-
-function toggleRRPP(id) {
-  var r = RRPP_LIST.find(function (x) { return x.id === id; });
-  if (r) { r.active = !r.active; toast(r.active ? '✅ RRPP activado' : '❌ RRPP desactivado'); renderRRPPDetail(id); }
-}
-
-function renderAddRRPPModal() {
-  var modal = document.getElementById('modal-add-rrpp');
-  modal.querySelector('.bottom-sheet').innerHTML = '<div class="sheet-handle"></div><div class="sheet-title">👥 Nuevo RRPP</div>'
-    + '<div class="form-group"><label>Nombre completo</label><input class="input" type="text" placeholder="Nombre" id="rrpp-name" /></div>'
-    + '<div class="form-group"><label>Email</label><input class="input" type="email" placeholder="email@ejemplo.com" id="rrpp-email" /></div>'
-    + '<div class="form-group"><label>Teléfono</label><input class="input" type="tel" placeholder="+54 911..." id="rrpp-phone" /></div>'
-    + '<div class="form-group"><label>Comisión (%)</label><input class="input" type="number" placeholder="15" value="15" min="5" max="30" id="rrpp-comm" /></div>'
-    + '<button class="btn btn-primary btn-full" style="margin-top:0.5rem" onclick="addRRPP()">✅ Agregar RRPP</button>'
-    + '<button class="btn btn-ghost btn-full" style="margin-top:0.5rem" onclick="closeModal(\'modal-add-rrpp\')">Cancelar</button>';
-}
-
-function addRRPP() {
-  var name = document.getElementById('rrpp-name') && document.getElementById('rrpp-name').value.trim();
-  var email = document.getElementById('rrpp-email') && document.getElementById('rrpp-email').value.trim();
-  if (!name || !email) { toast('⚠️ Completa nombre y email'); return; }
-  RRPP_LIST.push({ id: Date.now(), name: name, email: email, phone: '', commission: 0.15, sold: 0, revenue: 0, earned: 0, joinDate: new Date().toISOString().slice(0, 10), active: true, sales: [] });
-  closeModal('modal-add-rrpp');
-  toast('✅ ' + name + ' agregado como RRPP (local). Backend puede persistir en el futuro.');
-  renderRRPP();
-}
-
-// ── PROFILE PAGE ─────────────────────────────────────────────────────────────
-// Usa AppState.currentUser (GET /api/me). Sin DATABASE.
-function renderProfile() {
-  var user = AppState.currentUser;
-  var displayName = (user && user.displayName) ? user.displayName : (user && user.email) ? user.email : 'Usuario';
-  var roleLabel = (user && user.role) ? user.role : '—';
-  var el = document.getElementById('page-profile');
-  var content = el.querySelector('.page-content');
-  content.innerHTML = '<div style="margin:-0.5rem -1rem 1.5rem;background:linear-gradient(135deg,#1a0820,#3d0055,#1a0820);height:140px;display:flex;align-items:center;justify-content:center;font-size:4rem;position:relative">🌌</div>'
-    + '<div style="text-align:center;margin-top:-50px;position:relative;z-index:1;margin-bottom:1.5rem">'
-    + '<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6b1a8a);border:3px solid var(--primary);margin:0 auto 0.75rem;display:flex;align-items:center;justify-content:center;font-size:2rem;box-shadow:0 0 20px var(--primary-glow)">👤</div>'
-    + '<h2 style="font-size:1.3rem;font-weight:900">' + displayName + '</h2>'
-    + '<div style="color:var(--primary);font-size:0.85rem;font-weight:600">Paraíso Astral · ' + roleLabel + '</div></div>'
-    + '<div class="stats-grid" style="margin-bottom:1.5rem">'
-    + '<div class="stat-card" style="text-align:center"><div class="stat-label">Eventos</div><div class="stat-value">—</div></div>'
-    + '<div class="stat-card" style="text-align:center"><div class="stat-label">Artistas</div><div class="stat-value">—</div></div>'
-    + '<div class="stat-card" style="text-align:center"><div class="stat-label">RRPP</div><div class="stat-value">' + RRPP_LIST.length + '</div></div>'
-    + '<div class="stat-card" style="text-align:center"><div class="stat-label">Noticias</div><div class="stat-value">' + NEWS_LIST.length + '</div></div></div>'
-    + '<div class="section-title font-display" style="margin-bottom:0.75rem">Configuración</div>'
-    + [
-      { icon: '🔔', label: 'Notificaciones', action: "navigate('notifications')" },
-      { icon: '👥', label: 'Gestionar RRPP', action: "navigate('rrpp')" },
-      { icon: '📊', label: 'Panel Admin', action: "navigate('admin')" },
-      { icon: '📤', label: 'Exportar Datos', action: "exportData()" },
-      { icon: '📱', label: 'Instalar App (PWA)', action: "installPWA()" },
-      { icon: '🌙', label: 'Modo oscuro', action: "toast('🌙 Ya estás en modo oscuro!')" }
-    ].map(function (item) {
-      return '<div class="list-item" onclick="' + item.action + '" style="margin-bottom:0.5rem"><div class="list-icon">' + item.icon + '</div><div class="list-body"><div class="list-title">' + item.label + '</div></div><span style="color:var(--primary)">›</span></div>';
-    }).join('');
-}
-
-let deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; });
-function installPWA() {
-  if (deferredPrompt) { deferredPrompt.prompt(); }
-  else { toast('📱 Abre este sitio en Chrome y usa "Añadir a pantalla de inicio"'); }
-}
-
-// ── ADD EVENT MODAL ─────────────────────────────────────────────────────────
-function openEditEventModal(eventId) {
-  window.ApiClient.get('/api/events/' + eventId).then(function (e) {
-    if (!window.AppState) window.AppState = {};
-    window.AppState.editingEvent = e;
-    window.openModal('modal-add-event');
-  }).catch(function (err) {
-    toast('❌ No se pudo cargar el evento');
-    console.error(err);
-  });
-}
-
-function renderAddEventModal() {
-  var editing = window.AppState && window.AppState.editingEvent;
-  var isEdit = !!editing;
-  var title = isEdit ? '✏️ Editar Evento' : '🎉 Nuevo Evento';
-  var submitLabel = isEdit ? 'Guardar cambios' : '✅ Crear Evento';
-  var dateVal = '';
-  var timeVal = '20:00';
-  var titleVal = '';
-  var venueVal = '';
-  var descVal = '';
-  var lineupVal = '';
-  var coverPreviewHtml = '';
-  var coverUrlAttr = '';
-  if (isEdit && editing) {
-    titleVal = (editing.title || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-    venueVal = (editing.venue || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-    descVal = (editing.description || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-    lineupVal = ''; // lineup no se persiste por separado en el backend
-    if (editing.startAt) {
-      var d = new Date(editing.startAt);
-      dateVal = d.toISOString().slice(0, 10);
-      var h = d.getHours();
-      var m = d.getMinutes();
-      timeVal = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
-    }
-    if (editing.coverImage) {
-      var safeCover = String(editing.coverImage).replace(/"/g, '&quot;').replace(/</g, '&lt;');
-      coverPreviewHtml = '<img src="' + safeCover + '" alt="" style="max-width:100%;max-height:120px;border-radius:var(--radius);border:1px solid var(--border)">';
-      coverUrlAttr = ' data-cover-url="' + safeCover + '"';
-    }
-  }
-  const modal = document.getElementById('modal-add-event');
-  modal.querySelector('.bottom-sheet').innerHTML = `
-    <div class="sheet-handle"></div>
-    <div class="sheet-title">${title}</div>
-    <div class="form-group"><label>Nombre del evento</label><input class="input" type="text" placeholder="Ej: Cosmic Rave Vol. 3" id="ev-title" value="${titleVal}" /></div>
-    <div class="form-group"><label>Venue / Lugar</label><input class="input" type="text" placeholder="Nombre del lugar" id="ev-venue" value="${venueVal}" /></div>
-    <div class="form-group"><label>Fecha</label><input class="input" type="date" id="ev-date" value="${dateVal}" /></div>
-    <div class="form-group"><label>Horario</label>
-      <div class="horario-buttons" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem">
-        <button type="button" class="btn btn-ghost btn-sm ev-time-btn" data-time="20:00">20:00</button>
-        <button type="button" class="btn btn-ghost btn-sm ev-time-btn" data-time="21:00">21:00</button>
-        <button type="button" class="btn btn-ghost btn-sm ev-time-btn" data-time="22:00">22:00</button>
-        <button type="button" class="btn btn-ghost btn-sm ev-time-btn" data-time="23:00">23:00</button>
-        <button type="button" class="btn btn-ghost btn-sm ev-time-btn" data-time="00:00">00:00</button>
-      </div>
-      <input class="input" type="text" placeholder="22:00 - 06:00" id="ev-time" value="${timeVal}" />
-    </div>
-    <div class="form-group"><label>Lineup (separado por comas)</label><input class="input" type="text" placeholder="DJ1, DJ2, DJ3" id="ev-lineup" value="${lineupVal}" /></div>
-    <div class="form-group"><label>Descripción</label><textarea class="input" id="ev-desc" rows="3" placeholder="Describe el evento, ambiente, qué esperar...">${descVal}</textarea></div>
-    <div class="form-group"><label>Imagen de portada</label><input class="input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" id="ev-cover" /><div id="ev-cover-preview" style="margin-top:0.5rem;min-height:0"${coverUrlAttr}>${coverPreviewHtml}</div></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;margin-bottom:1rem">
-      <div class="form-group" style="margin-bottom:0"><label>General $</label><input class="input" type="number" placeholder="45" id="ev-gen" /></div>
-      <div class="form-group" style="margin-bottom:0"><label>VIP $</label><input class="input" type="number" placeholder="120" id="ev-vip" /></div>
-      <div class="form-group" style="margin-bottom:0"><label>Backstage $</label><input class="input" type="number" placeholder="200" id="ev-back" /></div>
-    </div>
-    <button class="btn btn-primary btn-full" onclick="addEvent()">${submitLabel}</button>
-    <button class="btn btn-ghost btn-full" style="margin-top:0.5rem" onclick="if(window.AppState)window.AppState.editingEvent=null;closeModal('modal-add-event')">Cancelar</button>
-  `;
-  modal.querySelectorAll('.ev-time-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var input = document.getElementById('ev-time');
-      if (input) input.value = this.getAttribute('data-time');
-    });
-  });
-  var coverInput = document.getElementById('ev-cover');
-  if (coverInput) {
-    coverInput.addEventListener('change', function () {
-      var file = this.files && this.files[0];
-      var preview = document.getElementById('ev-cover-preview');
-      if (!preview) return;
-      preview.innerHTML = '';
-      if (!file) return;
-      preview.innerHTML = '<span style="color:var(--text-muted);font-size:0.85rem">Subiendo…</span>';
-      window.ApiClient.uploadFile('/api/upload/event-cover', file).then(function (r) {
-        preview.innerHTML = '<img src="' + r.url + '" alt="" style="max-width:100%;max-height:120px;border-radius:var(--radius);border:1px solid var(--border)">';
-        preview.setAttribute('data-cover-url', r.url);
-      }).catch(function (err) {
-        preview.innerHTML = '<span style="color:var(--red, #f44);font-size:0.85rem">' + (err.message || 'Error al subir') + '</span>';
-      });
-    });
-  }
-}
-
-async function addEvent() {
-  var editing = window.AppState && window.AppState.editingEvent;
-  var titleEl = document.getElementById('ev-title');
-  var venueEl = document.getElementById('ev-venue');
-  var dateEl = document.getElementById('ev-date');
-  var timeEl = document.getElementById('ev-time');
-  var lineupEl = document.getElementById('ev-lineup');
-  var descEl = document.getElementById('ev-desc');
-  var title = titleEl ? titleEl.value.trim() : '';
-  var venue = venueEl ? venueEl.value.trim() : '';
-  var date = dateEl ? dateEl.value : '';
-  if (!title || !venue || !date) { toast('⚠️ Completa nombre, lugar y fecha'); return; }
-
-  var timeStr = (timeEl && timeEl.value.trim()) || '20:00';
-  var timePart = (timeStr.split(/\s+-\s+/)[0] || timeStr.split(/\s+/)[0] || '20:00').trim();
-  if (!/^\d{1,2}:\d{2}/.test(timePart)) timePart += ':00';
-  var startAt = date + 'T' + timePart + ':00';
-
-  var lineupStr = (lineupEl && lineupEl.value.trim()) || '';
-  var descStr = (descEl && descEl.value.trim()) || '';
-  var description = [lineupStr ? 'Lineup: ' + lineupStr : '', descStr].filter(Boolean).join('\n\n') || undefined;
-  var previewEl = document.getElementById('ev-cover-preview');
-  var coverImage = (previewEl && previewEl.getAttribute('data-cover-url')) || undefined;
-
-  if (editing && editing.id) {
-    var payload = { title: title, venue: venue, startAt: startAt, description: description || undefined, coverImage: coverImage };
-    closeModal('modal-add-event');
-    try {
-      await window.ApiClient.request('/api/events/' + editing.id, { method: 'PATCH', body: payload });
-      if (window.AppState) window.AppState.editingEvent = null;
-      toast('✅ Evento actualizado.');
-      renderEventDetail(editing.id);
-      var adminContent = document.querySelector('#page-admin .page-content');
-      if (adminContent) renderAdmin();
-    } catch (err) {
-      console.error('[addEvent] PATCH error:', err);
-      toast('❌ ' + (err && err.message ? err.message : 'Error al actualizar'));
-    }
-    return;
-  }
-
-  var payload = { title: title, venue: venue, startAt: startAt, description: description || undefined, coverImage: coverImage };
-  console.log('[addEvent] POST /api/events payload:', payload);
-  closeModal('modal-add-event');
-  try {
-    var res = await window.ApiClient.post('/api/events', payload);
-    console.log('[addEvent] POST /api/events success:', res);
-    toast('🎉 Evento creado correctamente.');
-    var created = [res];
-    renderHome(created);
-    renderEvents('upcoming', created);
-    var adminContent = document.querySelector('#page-admin .page-content');
-    if (adminContent) renderAdmin();
-  } catch (err) {
-    console.error('[addEvent] POST /api/events error:', err);
-    toast('❌ ' + (err && err.message ? err.message : 'Error al crear el evento'));
-  }
-}
-
-// ── INIT ──────────────────────────────────────────────────────────────────────
-// Handle nav-detail pages navigation
-function navigateWithData(pageId, data) {
-  if (pageId === 'news-detail') {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    const page = document.getElementById('page-news-detail');
-    page.classList.add('active');
-    renderNewsDetail(data);
-    return;
-  }
-  navigate(pageId, data);
-}
-// Override navigate for news-detail
-const _nav = navigate;
-window.navigate = function(pageId, data) {
-  if (pageId === 'news-detail') { renderNewsDetail(data); document.querySelectorAll('.page').forEach(p=>p.classList.remove('active')); document.getElementById('page-news-detail').classList.add('active'); return; }
-  _nav(pageId, data);
-};
-
-// ===== AUTHENTICATION FUNCTIONS =====
-
-/**
- * Show login page
- */
-function showLogin() {
-  navigate('login');
-}
-
-/**
- * Show register page
- */
-function showRegister() {
-  navigate('register');
-}
 
 /**
  * Handle login form submission
@@ -2210,51 +1659,6 @@ async function handleLogin(event) {
 }
 
 /**
- * Handle register form submission
- */
-async function handleRegister(event) {
-  event.preventDefault();
-  
-  const email = document.getElementById('register-email').value;
-  const password = document.getElementById('register-password').value;
-  const confirm = document.getElementById('register-confirm').value;
-  const errorDiv = document.getElementById('register-error');
-  const btnText = document.getElementById('register-btn-text');
-  const loading = document.getElementById('register-loading');
-  
-  // Validate passwords match
-  if (password !== confirm) {
-    errorDiv.textContent = 'Las contraseñas no coinciden';
-    errorDiv.style.display = 'block';
-    return;
-  }
-  
-  // Show loading state
-  btnText.style.display = 'none';
-  loading.style.display = 'inline';
-  errorDiv.style.display = 'none';
-  
-  try {
-    const result = await window.Auth.register(email, password);
-    
-    if (result.success) {
-      toast('🌟 ¡Cuenta creada exitosamente!');
-      navigate('home');
-    } else {
-      errorDiv.textContent = result.error;
-      errorDiv.style.display = 'block';
-    }
-  } catch (error) {
-    errorDiv.textContent = 'Error de conexión. Intenta nuevamente.';
-    errorDiv.style.display = 'block';
-  } finally {
-    // Hide loading state
-    btnText.style.display = 'inline';
-    loading.style.display = 'none';
-  }
-}
-
-/**
  * Handle logout
  */
 async function handleLogout() {
@@ -2262,19 +1666,9 @@ async function handleLogout() {
     await window.Auth.logout();
     AppState.currentUser = null;
     toast('👋 Sesión cerrada');
-    navigate('login');
+    navigate('home');
   } catch (error) {
     toast('Error al cerrar sesión');
-  }
-}
-
-/**
- * Check authentication state and redirect if needed
- */
-function checkAuthState() {
-  var user = window.Auth && typeof window.Auth.getCurrentUser === 'function' ? window.Auth.getCurrentUser() : null;
-  if (!user) {
-    navigate('login');
   }
 }
 

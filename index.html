@@ -4,12 +4,29 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#d125f4" />
-  <meta name="description" content="Paraíso Astral - Tu portal cósmico de música electrónica" />
+  <meta name="description" content="Paraíso Astral — productora de música electrónica. Próximos eventos, artistas del roster y contacto." />
+
+  <!-- PWA / iOS -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Paraíso Astral" />
   <link rel="manifest" href="manifest.json" />
-  <title>Paraíso Astral</title>
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Paraíso Astral" />
+  <meta property="og:title" content="Paraíso Astral — Electronic Universe" />
+  <meta property="og:description" content="Productora de música electrónica. Próximos eventos, artistas del roster y contacto." />
+  <meta property="og:locale" content="es_AR" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Paraíso Astral — Electronic Universe" />
+  <meta name="twitter:description" content="Productora de música electrónica. Próximos eventos, artistas del roster y contacto." />
+
+  <title>Paraíso Astral — Electronic Universe</title>
+
   <link rel="stylesheet" href="styles/base.css" />
   <link rel="stylesheet" href="styles/theme.css" />
   <link rel="stylesheet" href="styles/components.css" />
@@ -20,7 +37,7 @@
 
   <!-- ════ HEADER ════ -->
   <header class="app-header">
-    <div class="logo">
+    <div class="logo" onclick="navigate('home')" style="cursor:pointer">
       <div class="logo-icon">🌌</div>
       <div>
         <div class="logo-text">PARAÍSO ASTRAL</div>
@@ -28,77 +45,42 @@
       </div>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" onclick="navigate('contact')" title="Contacto">✉️</button>
+      <button class="icon-btn" onclick="navigate('contact')" title="Contacto" aria-label="Contacto">✉️</button>
     </div>
   </header>
 
   <!-- ════ PAGES ════ -->
 
-  <!-- LOGIN -->
+  <!-- LOGIN (admin) -->
   <div class="page" id="page-login">
     <div class="page-content fade-in">
       <div style="text-align:center;max-width:400px;margin:0 auto;padding:2rem 1rem">
         <div style="font-size:4rem;margin-bottom:1rem">🌌</div>
         <h1 style="font-family:var(--font-display);font-size:clamp(1.3rem, 7vw, 2rem);font-weight:900;margin-bottom:0.5rem;color:var(--primary);word-break:break-word">PARAÍSO ASTRAL</h1>
-        <p style="color:var(--text-muted);margin-bottom:2rem">Tu portal cósmico de música electrónica</p>
-        
+        <p style="color:var(--text-muted);margin-bottom:2rem">Acceso admin</p>
+
         <form id="login-form" style="text-align:left">
           <div class="form-group">
             <label for="login-email">Email</label>
-            <input type="email" id="login-email" class="input" placeholder="tu@email.com" required>
+            <input type="email" id="login-email" class="input" placeholder="tu@email.com" required autocomplete="email">
           </div>
-          
+
           <div class="form-group">
             <label for="login-password">Contraseña</label>
-            <input type="password" id="login-password" class="input" placeholder="•••••••••" required>
+            <input type="password" id="login-password" class="input" placeholder="•••••••••" required autocomplete="current-password">
           </div>
-          
+
           <button type="submit" class="btn btn-primary btn-full" style="margin-top:1.5rem">
-            <span id="login-btn-text">🚀 Iniciar Sesión</span>
+            <span id="login-btn-text">🚀 Iniciar sesión</span>
             <span id="login-loading" style="display:none">🔄 Conectando...</span>
           </button>
         </form>
-        
-        <div id="login-error" style="margin-top:1rem;padding:0.75rem;background:rgba(255,0,64,0.1);border:1px solid rgba(255,0,64,0.3);border-radius:var(--radius);color:var(--pink);font-size:0.85rem;display:none"></div>
-      </div>
-    </div>
-  </div>
 
-  <!-- REGISTER -->
-  <div class="page" id="page-register">
-    <div class="page-content fade-in">
-      <div style="text-align:center;max-width:400px;margin:0 auto;padding:2rem 1rem">
-        <div style="font-size:4rem;margin-bottom:1rem">🌌</div>
-        <h1 style="font-family:var(--font-display);font-size:clamp(1.3rem, 7vw, 2rem);font-weight:900;margin-bottom:0.5rem;color:var(--primary);word-break:break-word">Únete al Cosmos</h1>
-        <p style="color:var(--text-muted);margin-bottom:2rem">Crea tu cuenta en Paraíso Astral</p>
-        
-        <form id="register-form" style="text-align:left">
-          <div class="form-group">
-            <label for="register-email">Email</label>
-            <input type="email" id="register-email" class="input" placeholder="tu@email.com" required>
-          </div>
-          
-          <div class="form-group">
-            <label for="register-password">Contraseña</label>
-            <input type="password" id="register-password" class="input" placeholder="Mínimo 6 caracteres" required>
-          </div>
-          
-          <div class="form-group">
-            <label for="register-confirm">Confirmar Contraseña</label>
-            <input type="password" id="register-confirm" class="input" placeholder="Repite tu contraseña" required>
-          </div>
-          
-          <button type="submit" class="btn btn-primary btn-full" style="margin-top:1.5rem">
-            <span id="register-btn-text">🌟 Crear Cuenta</span>
-            <span id="register-loading" style="display:none">🔄 Creando...</span>
-          </button>
-          
-          <div style="margin-top:1rem;text-align:center">
-            <a href="#" onclick="showLogin()" style="color:var(--primary);font-size:0.85rem">¿Ya tienes cuenta? Inicia sesión</a>
-          </div>
-        </form>
-        
-        <div id="register-error" style="margin-top:1rem;padding:0.75rem;background:rgba(255,0,64,0.1);border:1px solid rgba(255,0,64,0.3);border-radius:var(--radius);color:var(--pink);font-size:0.85rem;display:none"></div>
+        <div id="login-error" style="margin-top:1rem;padding:0.75rem;background:rgba(255,0,64,0.1);border:1px solid rgba(255,0,64,0.3);border-radius:var(--radius);color:var(--pink);font-size:0.85rem;display:none"></div>
+
+        <div style="margin-top:1.5rem">
+          <button class="btn btn-ghost" style="font-size:0.78rem" onclick="navigate('home')">← Volver al sitio</button>
+        </div>
       </div>
     </div>
   </div>
@@ -128,56 +110,13 @@
     <div class="page-content fade-in"></div>
   </div>
 
-  <!-- TICKETS -->
-  <div class="page" id="page-tickets">
+  <!-- CONTACT -->
+  <div class="page" id="page-contact">
     <div class="page-content fade-in"></div>
-  </div>
-
-  <!-- NEWS -->
-  <div class="page" id="page-news">
-    <div class="page-content fade-in">
-      <div class="section-header"><span class="section-title">Noticias & Novedades</span></div>
-    </div>
-  </div>
-
-  <!-- NEWS DETAIL -->
-  <div class="page" id="page-news-detail">
-    <div class="page-content fade-in"></div>
-  </div>
-
-  <!-- NOTIFICATIONS -->
-  <div class="page" id="page-notifications">
-    <div class="page-content fade-in">
-      <div class="section-header"><span class="section-title">Notificaciones</span></div>
-    </div>
   </div>
 
   <!-- ADMIN -->
   <div class="page" id="page-admin">
-    <div class="page-content fade-in"></div>
-  </div>
-
-  <!-- RRPP LIST -->
-  <div class="page" id="page-rrpp">
-    <div class="page-content fade-in">
-      <div class="section-header">
-        <span class="section-title">Gestión RRPP</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- RRPP DETAIL -->
-  <div class="page" id="page-rrpp-detail">
-    <div class="page-content fade-in"></div>
-  </div>
-
-  <!-- PROFILE -->
-  <div class="page" id="page-profile">
-    <div class="page-content fade-in"></div>
-  </div>
-
-  <!-- CONTACT -->
-  <div class="page" id="page-contact">
     <div class="page-content fade-in"></div>
   </div>
 
@@ -188,13 +127,13 @@
         <div class="empty-icon">🌌</div>
         <div class="empty-title">Página no encontrada</div>
         <div style="color: var(--text-muted); margin-top: 0.5rem;">La ruta que buscas no existe en el cosmos</div>
-        <button class="btn btn-primary" style="margin-top: 1.5rem" onclick="Router.push('/')">🏠 Volver al inicio</button>
+        <button class="btn btn-primary" style="margin-top: 1.5rem" onclick="navigate('home')">🏠 Volver al inicio</button>
       </div>
     </div>
   </div>
 
   <!-- ════ BOTTOM NAV ════ -->
-  <!-- Admin quedó fuera del nav (accesible vía hash #admin o el link del footer de home) -->
+  <!-- Admin accesible vía hash #admin o el link discreto al pie del home -->
   <nav class="bottom-nav">
     <button class="nav-item" data-nav="home" onclick="navigate('home')">
       <span class="nav-icon">🏠</span>
@@ -215,64 +154,28 @@
 
 </div><!-- /app -->
 
-<!-- ════ MODALS ════ -->
-
-<!-- Payment Modal -->
-<div class="modal-overlay" id="modal-payment" onclick="if(event.target===this)closeModal('modal-payment')">
-  <div class="bottom-sheet" id="modal-payment-sheet">
-    <div class="sheet-handle"></div>
-    <div class="sheet-title">💳 Finalizar Compra</div>
-  </div>
-</div>
-
-<!-- Add RRPP Modal -->
-<div class="modal-overlay" id="modal-add-rrpp" onclick="if(event.target===this)closeModal('modal-add-rrpp')">
-  <div class="bottom-sheet">
-    <div class="sheet-handle"></div>
-    <div class="sheet-title">👥 Nuevo RRPP</div>
-  </div>
-</div>
-
-<!-- Add Event Modal -->
-<div class="modal-overlay" id="modal-add-event" onclick="if(event.target===this)closeModal('modal-add-event')">
-  <div class="bottom-sheet">
-    <div class="sheet-handle"></div>
-    <div class="sheet-title">🎉 Nuevo Evento</div>
-  </div>
-</div>
-
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
-<!-- Firebase SDK -->
+<!-- ════ SCRIPTS ════ -->
+
+<!-- Firebase SDK (Auth + Firestore) -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
 
-<!-- Env: genera con "node scripts/generate-env.js" desde .env -->
+<!-- Env (generado por `node scripts/generate-env.js` desde .env) -->
 <script>window.__ENV__ = window.__ENV__ || {};</script>
 <script src="js/env.public.js"></script>
-<!-- Configuration -->
+
+<!-- App modules -->
 <script src="js/config.js"></script>
 <script src="js/firebase.js"></script>
 <script src="js/auth.js"></script>
-<script src="js/apiClient.js"></script>
 <script src="js/firestoreClient.js"></script>
 <script src="js/cloudinaryClient.js"></script>
 <script src="js/dataSource.js"></script>
 <script src="js/app.js"></script>
-<script>
-  // Patch modal content rendering after app loads
-  document.addEventListener('DOMContentLoaded', () => {
-    // Render modal contents when opened
-    const origOpen = window.openModal;
-    window.openModal = function(id) {
-      if (id === 'modal-payment') renderPaymentModal();
-      if (id === 'modal-add-rrpp') renderAddRRPPModal();
-      if (id === 'modal-add-event') renderAddEventModal();
-      document.getElementById(id).classList.add('show');
-    };
-  });
-</script>
+
 </body>
 </html>
