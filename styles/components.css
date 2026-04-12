@@ -64,14 +64,19 @@
   border-top: 1px solid var(--border);
   z-index: 100;
   padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  overflow: hidden;
 }
 .nav-item {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
-  cursor: pointer; padding: 0.4rem 0.6rem;
-  color: var(--text-muted); font-size: 0.6rem; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.08em;
+  cursor: pointer; padding: 0.4rem 0.35rem;
+  color: var(--text-muted); font-size: 0.58rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
   transition: all 0.2s; border: none; background: none;
   text-decoration: none;
+  flex: 1 1 0;
+  min-width: 0;
 }
 .nav-item .nav-icon { font-size: 1.35rem; transition: all 0.2s; }
 .nav-item.active { color: var(--primary); }
@@ -601,12 +606,12 @@ label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bo
 .artist-genre { font-size: 0.7rem; color: rgba(209,37,244,0.7); margin-top: 0.2rem; display: flex; align-items: center; gap: 0.2rem; }
 
 /* ===== CALENDAR ===== */
-.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-.cal-day-header { text-align: center; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); padding: 0.4rem 0; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; width: 100%; }
+.cal-day-header { text-align: center; font-size: 0.55rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); padding: 0.35rem 0; min-width: 0; }
 .cal-day {
   aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
-  border-radius: 50%; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
-  position: relative; font-weight: 500;
+  border-radius: 50%; font-size: 0.75rem; cursor: pointer; transition: all 0.2s;
+  position: relative; font-weight: 500; min-width: 0;
 }
 .cal-day:hover { background: rgba(209,37,244,0.1); }
 .cal-day.has-event::after { content: ''; position: absolute; bottom: 3px; width: 4px; height: 4px; background: var(--primary); border-radius: 50%; }

@@ -81,10 +81,8 @@ function navigate(pageId, data) {
   if (pageId === 'home') { renderHome(); }
   if (pageId === 'events') { renderEvents(); }
   if (pageId === 'artists') { renderArtists(); }
+  if (pageId === 'contact') { renderContact(); }
   if (pageId === 'admin') { renderAdmin(); }
-  if (pageId === 'rrpp') { renderRRPP(); }
-  if (pageId === 'news') { renderNews(); }
-  if (pageId === 'notifications') { renderNotifications(); }
 }
 
 // ── ERROR HANDLING ──────────────────────────────────────────────────────────────────
@@ -175,43 +173,23 @@ function showErrorState(container, message, retryCallback = null, actionButton =
 function initializeApp() {
   // Initialize error handling
   initializeErrorHandling();
-  
-  // Handle URL hash for initial navigation
-  handleInitialRoute();
-  
+
   // Setup form listeners
   setupFormListeners();
-  
-  setTimeout(async function () {
-    if (!window.Auth || typeof window.Auth.isAuthenticated !== 'function' || !window.Auth.isAuthenticated()) {
-      navigate('login');
-      return;
+
+  // Público por defecto: arrancamos en home, sin backend /api/me.
+  // El hash de URL (#events, #artists, etc.) sigue respetándose.
+  // Solo /admin pide login (lo maneja navigate() con canAccessRoute).
+  AppState.currentUser = null;
+
+  setTimeout(function () {
+    var hash = window.location.hash.slice(1);
+    if (hash) {
+      handleInitialRoute();
+    } else {
+      navigate('home');
     }
-    try {
-      var response = await window.ApiClient.get('/api/me');
-      if (response.status !== 'success' || !response.data) {
-        if (window.Auth.logout) await window.Auth.logout();
-        AppState.currentUser = null;
-        navigate('login');
-        return;
-      }
-      AppState.currentUser = response.data;
-      var user = response.data;
-      if (user.role === 'ADMIN') {
-        navigate('admin');
-      } else if (user.role === 'ARTIST') {
-        navigate('profile');
-      } else if (user.role === 'PR') {
-        navigate('rrpp');
-      } else {
-        navigate('home');
-      }
-    } catch (err) {
-      if (window.Auth && window.Auth.logout) await window.Auth.logout();
-      AppState.currentUser = null;
-      navigate('login');
-    }
-  }, 100);
+  }, 50);
 }
 
 /**
@@ -268,95 +246,113 @@ function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
 // ── HOME PAGE ────────────────────────────────────────────────────────────────
-async function renderHome(prependEvents) {
+async function renderHome() {
   const el = document.getElementById('page-home');
   const content = el.querySelector('.page-content');
-  
-  // Show loading state
-  showLoading(content, 'Cargando eventos...');
-  
+  showLoading(content, 'Sintonizando frecuencia astral...');
+
   try {
-    // Fetch events from backend (público, sin login)
-    const response = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
-    var events = response.data || [];
-    if (Array.isArray(prependEvents) && prependEvents.length) {
-      var ids = {};
-      events.forEach(function (e) { ids[e.id] = true; });
-      prependEvents.forEach(function (e) { if (!ids[e.id]) { events.unshift(e); ids[e.id] = true; } });
-    }
-    console.log('[renderHome] GET /api/events →', events.length, 'events', events.length ? events.map(function (e) { return { id: e.id, title: e.title, startAt: e.startAt }; }) : []);
-    if (!events || events.length === 0) {
-      showErrorState(content, 'No hay eventos disponibles', null, {
-        label: '➕ Nuevo Evento',
-        onclick: "if(window.AppState)window.AppState.editingEvent=null;openModal('modal-add-event')"
-      });
-      return;
-    }
-    
-        // Find live and published events for home sections
-    const liveEvent = events.find(e => e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date()));
-    const homeEvents = events
+    // Fetch site config, events y artists en paralelo desde DataSource.
+    const [cfgRes, evRes, arRes] = await Promise.all([
+      window.DataSource.getSiteConfig(),
+      window.DataSource.getEvents(),
+      window.DataSource.getArtists()
+    ]);
+
+    const cfg = cfgRes.data || {};
+    const allEvents = Array.isArray(evRes.data) ? evRes.data : [];
+    const artists = Array.isArray(arRes.data) ? arRes.data : [];
+
+    // Solo eventos publicados, ordenados por fecha ascendente.
+    const now = new Date();
+    const upcoming = allEvents
       .filter(e => e.status === 'PUBLISHED')
+      .filter(e => !e.startAt || new Date(e.startAt) >= now)
       .sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
-    
-    // Mock news for now (can be replaced with real news API later)
-    const recentNews = [
-      { id: 1, emoji: '🎛️', category: 'Producción', title: 'Mastering para frecuencias cósmicas' },
-      { id: 2, emoji: '⭐', category: 'Nuevo Artista', title: 'Introduciendo a Nebula Void' },
-      { id: 3, emoji: '🌍', category: 'Tour', title: 'European Astral Tour 2025' },
-      { id: 4, emoji: '🔊', category: 'Festival', title: 'Nuevo stage en Supernova Festival' }
-    ].slice(0, 4);
+
+    const featured = upcoming[0] || null;
+    const nextEvents = upcoming.slice(featured ? 1 : 0, featured ? 5 : 4);
+    const topArtists = artists.slice(0, 6);
+
+    const safe = (window.ApiClient && window.ApiClient.sanitizeHTML)
+      ? window.ApiClient.sanitizeHTML
+      : function (s) { return String(s == null ? '' : s).replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+
+    const heroStyle = cfg.heroImage
+      ? 'background-image:linear-gradient(180deg,rgba(10,0,20,0.35),rgba(10,0,20,0.85)),url(' + String(cfg.heroImage).replace(/"/g, '') + ');background-size:cover;background-position:center'
+      : 'background:linear-gradient(135deg,#1a0820,#2d0040 50%,#0a0012)';
 
     content.innerHTML = `
-    ${liveEvent ? `
-    <div style="background:rgba(255,0,64,0.1);border:1px solid rgba(255,0,64,0.3);border-radius:var(--radius-lg);padding:0.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:0.75rem;cursor:pointer;" onclick="navigate('event-detail', '${liveEvent.id}')">
-      <span style="font-size:1.2rem;animation:pulse-live 1.5s infinite">🔴</span>
-      <div style="flex:1"><div style="font-weight:700;font-size:0.85rem">${window.ApiClient.sanitizeHTML(liveEvent.title)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${window.ApiClient.sanitizeHTML(liveEvent.venue || 'Venue')} · LIVE AHORA</div></div>
-      <span class="badge badge-live">LIVE</span>
-    </div>` : ''}
-
-        <div class="events-dropdown card">
-      <div class="events-dropdown-header">
-        <button type="button" class="events-dropdown-toggle" onclick="toggleHomeEventsDropdown(this)" aria-expanded="false">
-          <span class="events-dropdown-title">Eventos</span>
-          <span class="events-dropdown-count">${homeEvents.length}</span>
-        </button>
-        <button type="button" class="events-dropdown-add" onclick="event.stopPropagation();if(window.AppState)window.AppState.editingEvent=null;openModal('modal-add-event')" aria-label="Agregar evento" title="Agregar evento">+</button>
+      <!-- HERO -->
+      <div class="hero" style="${heroStyle};border-radius:var(--radius-lg);padding:2.5rem 1rem;margin-bottom:1.5rem;text-align:center;border:1px solid var(--border);overflow:hidden">
+        <div style="font-size:3rem;margin-bottom:0.5rem">🌌</div>
+        <h1 style="font-family:var(--font-display);font-size:clamp(1.1rem, 5.5vw, 1.75rem);font-weight:900;margin:0;letter-spacing:0;line-height:1.15;word-break:break-word;overflow-wrap:break-word;max-width:100%">${safe(cfg.name || 'PARAÍSO ASTRAL')}</h1>
+        <p style="color:var(--text-muted);margin:0.5rem 0 0;font-size:0.95rem">${safe(cfg.tagline || 'Electronic Universe')}</p>
+        ${cfg.bio ? `<p style="color:var(--text-muted);margin:1rem auto 0;font-size:0.85rem;max-width:480px">${safe(cfg.bio)}</p>` : ''}
       </div>
-      <div class="events-dropdown-body" hidden>
-        ${homeEvents.length
-          ? homeEvents.map(e => renderEventCompactCard(e)).join('')
-          : '<div class="empty-state" style="margin:0.5rem 0"><div class="empty-title">Sin eventos publicados</div></div>'}
-      </div>
-    </div>
 
-    <div class="section-header">
-      <span class="section-title">Noticias & Novedades</span>
-      <a class="section-link" onclick="navigate('news')">Ver todo</a>
-    </div>
-    <div class="h-scroll">
-      ${recentNews.map(n => `
-        <div style="min-width:140px;cursor:pointer" onclick="navigate('news-detail','${n.id}')">
-          <div style="height:160px;border-radius:var(--radius-lg);background:linear-gradient(135deg,#1a0820,#2d0040);display:flex;align-items:center;justify-content:center;font-size:2.5rem;margin-bottom:0.5rem;border:1px solid var(--border)">${window.ApiClient.sanitizeHTML(n.emoji)}</div>
-          <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--primary);margin-bottom:0.2rem">${window.ApiClient.sanitizeHTML(n.category)}</div>
-          <div style="font-size:0.82rem;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${window.ApiClient.sanitizeHTML(n.title)}</div>
-        </div>`).join('')}
-    </div>
+      <!-- FEATURED EVENT -->
+      ${featured ? `
+        <div class="section-header"><span class="section-title">Próximo evento</span></div>
+        <div class="card" style="cursor:pointer;margin-bottom:1.5rem" onclick="navigate('event-detail','${featured.id}')">
+          ${featured.coverImage ? `<img src="${String(featured.coverImage).replace(/"/g, '&quot;')}" alt="" style="width:100%;height:200px;object-fit:cover;border-radius:var(--radius) var(--radius) 0 0">` : '<div style="height:160px;background:linear-gradient(135deg,#1a0820,#2d0040);display:flex;align-items:center;justify-content:center;font-size:3.5rem;border-radius:var(--radius) var(--radius) 0 0">🌌</div>'}
+          <div style="padding:1rem">
+            <div style="font-weight:800;font-size:1.15rem;margin-bottom:0.3rem">${safe(featured.title)}</div>
+            <div style="color:var(--text-muted);font-size:0.85rem">${new Date(featured.startAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })} · ${safe(featured.venue || '')}</div>
+          </div>
+        </div>
+      ` : ''}
 
-    <div class="section-header"><span class="section-title">Astral Radar</span></div>
-    <div class="card" style="padding:1rem;display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
-      <div style="width:56px;height:56px;border-radius:var(--radius);background:linear-gradient(135deg,var(--primary),#6b1a8a);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:1.5rem">🎵</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:0.65rem;color:var(--cyan);font-weight:700;text-transform:uppercase;letter-spacing:0.1em">Now Playing</div>
-        <div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Star Dust Memories (Original Mix)</div>
-        <div style="font-size:0.78rem;color:var(--text-muted)">DJ Orion • Astral Records</div>
+      <!-- NEXT EVENTS -->
+      ${nextEvents.length ? `
+        <div class="section-header">
+          <span class="section-title">${featured ? 'Más eventos' : 'Próximos eventos'}</span>
+          <a class="section-link" onclick="navigate('events')">Ver todos</a>
+        </div>
+        <div style="display:grid;gap:0.75rem;margin-bottom:1.5rem">
+          ${nextEvents.map(e => `
+            <div class="card" style="padding:0.85rem 1rem;cursor:pointer;display:flex;align-items:center;gap:0.9rem" onclick="navigate('event-detail','${e.id}')">
+              <div style="width:52px;height:52px;border-radius:var(--radius);background:linear-gradient(135deg,#1a0820,#2d0040);display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0">${e.coverImage ? `<img src="${String(e.coverImage).replace(/"/g, '&quot;')}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:var(--radius)">` : '🌌'}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:0.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safe(e.title)}</div>
+                <div style="color:var(--text-muted);font-size:0.78rem">${new Date(e.startAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} · ${safe(e.venue || '')}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      <!-- ARTISTS PREVIEW -->
+      ${topArtists.length ? `
+        <div class="section-header">
+          <span class="section-title">Artistas</span>
+          <a class="section-link" onclick="navigate('artists')">Ver todos</a>
+        </div>
+        <div class="h-scroll" style="margin-bottom:1.5rem">
+          ${topArtists.map(a => `
+            <div style="min-width:100px;text-align:center;cursor:pointer" onclick="navigate('artist-detail','${a.id}')">
+              <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6b1a8a);display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 0.4rem;overflow:hidden">${a.photo ? `<img src="${String(a.photo).replace(/"/g, '&quot;')}" alt="" style="width:100%;height:100%;object-fit:cover">` : (a.emoji || '🎧')}</div>
+              <div style="font-size:0.78rem;font-weight:700">${safe(a.name)}</div>
+              <div style="font-size:0.68rem;color:var(--text-muted)">${safe(a.genre || '')}</div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      <!-- FOOTER CTA -->
+      <div class="card" style="padding:1.25rem;text-align:center;margin-bottom:1rem">
+        <div style="font-weight:700;margin-bottom:0.25rem">¿Querés contactarnos?</div>
+        <div style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem">Booking, prensa, colaboraciones</div>
+        <button class="btn btn-primary" onclick="navigate('contact')">✉️ Contacto</button>
       </div>
-      <button class="icon-btn" onclick="toast('▶️ Reproduciendo...')">▶️</button>
-    </div>
-  `;
+
+      <div style="text-align:center;margin-bottom:1rem">
+        <a onclick="navigate('admin')" style="color:var(--text-muted);font-size:0.7rem;text-decoration:none;cursor:pointer;opacity:0.5">🔐 Admin</a>
+      </div>
+    `;
   } catch (error) {
     console.error('Error loading home:', error);
-    showErrorState(content, 'Error al cargar eventos', 'renderHome');
+    showErrorState(content, 'Error al cargar la página', 'renderHome');
   }
 }
 
@@ -410,8 +406,7 @@ function renderEventCompactCard(e) {
     + '<div class="event-compact-meta">' + date + ' · ' + venue + '</div>'
     + '<div class="event-compact-actions">'
     + editBtn
-    + '<button type="button" class="btn btn-outline event-compact-btn-vermas" onclick="navigate(\'event-detail\',\'' + safeId + '\')">Ver más</button>'
-    + '<button type="button" class="btn btn-primary event-compact-btn-comprar" onclick="navigate(\'tickets\',\'' + safeId + '\')">Comprar</button>'
+    + '<button type="button" class="btn btn-primary event-compact-btn-vermas" onclick="navigate(\'event-detail\',\'' + safeId + '\')">Ver más</button>'
     + '</div></div></div>';
 }
 
@@ -442,8 +437,7 @@ function renderEventCardMini(e) {
           </div>
           <div class="event-actions">
             ${(window.AppState && window.AppState.currentUser) ? '<button type="button" class="btn btn-ghost" style="padding:0.5rem 0.9rem;font-size:0.8rem" onclick="event.stopPropagation();openEditEventModal(\'' + safeId + '\')">✏️ Editar</button>' : ''}
-            <button type="button" class="btn btn-outline" style="padding:0.5rem 0.9rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('event-detail','${safeId}')">Ver detalle</button>
-            <button type="button" class="btn btn-primary" style="padding:0.5rem 0.9rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('tickets','${safeId}')">🎫 Entradas</button>
+            <button type="button" class="btn btn-primary" style="padding:0.5rem 0.9rem;font-size:0.8rem" onclick="event.stopPropagation();navigate('event-detail','${safeId}')">Ver detalle</button>
           </div>
         </div>
       </div>
@@ -475,32 +469,28 @@ async function renderEvents(filter, prependEvents) {
   `;
   
   try {
-    // Fetch events from backend (público, sin login)
-    const response = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
+    // Data desde DataSource (mock hoy, Firestore en Fase 2)
+    const response = await window.DataSource.getEvents();
     var events = response.data || [];
-    if (Array.isArray(prependEvents) && prependEvents.length) {
-      var ids = {};
-      events.forEach(function (e) { ids[e.id] = true; });
-      prependEvents.forEach(function (e) { if (!ids[e.id]) { events.unshift(e); ids[e.id] = true; } });
-    }
-    console.log('[renderEvents] GET /api/events filter=', filter, '→', events.length, 'events');
     if (!events || events.length === 0) {
-      document.getElementById('events-list').innerHTML = '<div class="empty-state"><div class="empty-icon">🌌</div><div class="empty-title">Sin eventos</div></div>';
+      document.getElementById('events-list').innerHTML = '<div class="empty-state"><div class="empty-icon">🌌</div><div class="empty-title">Sin eventos cargados todavía</div><div style="color:var(--text-muted);margin-top:0.5rem;font-size:0.85rem">Cargá el primero desde el panel Admin</div></div>';
       return;
     }
-    
-    // Filter events based on status
-    const filteredEvents = events.filter(e => {
-      if (filter === 'past') return new Date(e.startAt) < new Date();
-      if (filter === 'live') return e.status === 'PUBLISHED' && new Date(e.startAt) <= new Date() && (!e.endAt || new Date(e.endAt) > new Date());
-      return e.status === 'PUBLISHED' && new Date(e.startAt) > new Date();
-    });
-    console.log('[renderEvents] filtered →', filteredEvents.length, 'for', filter);
 
-    document.getElementById('events-list').innerHTML = filteredEvents.length === 0 ? 
-      '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos</div></div>' :
-        filteredEvents.map(e => renderEventCardFull(e)).join('');
-    
+    // Filtro por tipo (próximos / pasados). Live se trata como próximo que ya arrancó.
+    const now = new Date();
+    const filteredEvents = events.filter(e => {
+      if (e.status !== 'PUBLISHED') return false;
+      const start = new Date(e.startAt);
+      if (filter === 'past') return start < now;
+      if (filter === 'live') return start <= now && (!e.endAt || new Date(e.endAt) > now);
+      return start >= now;
+    });
+
+    document.getElementById('events-list').innerHTML = filteredEvents.length === 0
+      ? '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos en esta sección</div></div>'
+      : filteredEvents.map(e => renderEventCardFull(e)).join('');
+
   } catch (error) {
     console.error('Error loading events:', error);
     document.getElementById('events-list').innerHTML = `
@@ -514,9 +504,11 @@ async function renderEvents(filter, prependEvents) {
 }
 
 function renderCalendar() {
-  // Simplified calendar without DATABASE dependency
-  const year = 2024;
-  const month = 9;
+  // Calendario dinámico: mes/año actuales
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const today = now.getDate();
   const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
@@ -524,16 +516,14 @@ function renderCalendar() {
   let cells = '';
   for (let i = 0; i < firstDay; i++) cells += `<div class="cal-day other-month">${new Date(year, month, -firstDay + i + 1).getDate()}</div>`;
   for (let d = 1; d <= daysInMonth; d++) {
-    const isToday = d === 4 && month === 9;
-    cells += `<div class="cal-day ${isToday ? 'active' : ''}" onclick="renderEvents()">${d}</div>`;
+    const isToday = d === today;
+    cells += `<div class="cal-day ${isToday ? 'active' : ''}">${d}</div>`;
   }
 
   return `
     <div class="glass-card" style="padding:1rem;margin-bottom:1.2rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
-        <button class="icon-btn" style="width:32px;height:32px" onclick="renderEvents()">‹</button>
         <span class="font-display" style="font-size:0.85rem;font-weight:700">${monthNames[month]} ${year}</span>
-        <button class="icon-btn" style="width:32px;height:32px" onclick="renderEvents()">›</button>
       </div>
       <div class="calendar-grid">
         ${['D','L','M','X','J','V','S'].map(d => `<div class="cal-day-header">${d}</div>`).join('')}
@@ -741,30 +731,8 @@ async function renderEventDetail(eventId) {
   `;
   
   try {
-    var e = null;
-    var useAuth = !!window.AppState?.currentUser;
-    try {
-      e = await window.ApiClient.get('/api/events/' + eventId + '?_=' + Date.now(), { skipAuth: !useAuth });
-    } catch (err) {
-      if (useAuth) {
-        try {
-          e = await window.ApiClient.get('/api/events/' + eventId + '?_=' + Date.now(), { skipAuth: true });
-        } catch (_) {}
-      }
-      if (!e) {
-        var response = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
-        var events = response.data || [];
-        e = events.find(function (ev) { return ev.id === eventId; });
-      }
-    }
-    if (useAuth && e && e.canEdit !== true) {
-      try {
-        var withAuth = await window.ApiClient.get('/api/events/' + eventId + '?_=' + Date.now(), { skipAuth: false });
-        if (withAuth && withAuth.id === e.id) {
-          e = withAuth;
-        }
-      } catch (_) {}
-    }
+    var eventRes = await window.DataSource.getEvent(eventId);
+    var e = eventRes && eventRes.data ? eventRes.data : null;
     if (!e) {
       content.innerHTML = `
         <button onclick="navigate('` + returnTo + `')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
@@ -817,10 +785,7 @@ async function renderEventDetail(eventId) {
     <div style="margin-bottom:1rem">
       ${editImageBtn}
       <p style="font-size:0.9rem;line-height:1.55;color:rgba(240,230,255,0.85);margin-bottom:0.75rem">${(e.description || 'Una experiencia cósmica única te espera.').replace(/</g, '&lt;')}</p>
-      <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
-        <span class="badge badge-glass">${e.status}</span>
-        <span class="badge badge-glass">📍 ${(e.city || 'Sin ciudad').replace(/</g, '&lt;')}</span>
-      </div>
+      ${Array.isArray(e.tags) && e.tags.length ? `<div style="display:flex;gap:0.5rem;flex-wrap:wrap">${e.tags.map(function(t){return '<span class="badge badge-glass">'+String(t).replace(/</g,'&lt;')+'</span>';}).join('')}</div>` : ''}
     </div>
 
     <div class="section-header"><span class="section-title">Información</span></div>
@@ -834,30 +799,26 @@ async function renderEventDetail(eventId) {
           <div style="color:var(--text-muted);font-size:0.75rem;margin-bottom:0.25rem">Horario</div>
           <div style="font-weight:600">${new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
         </div>
+        ${e.venue ? `
+        <div style="grid-column:1/-1">
+          <div style="color:var(--text-muted);font-size:0.75rem;margin-bottom:0.25rem">Lugar</div>
+          <div style="font-weight:600">${String(e.venue).replace(/</g,'&lt;')}</div>
+        </div>
+        ` : ''}
       </div>
     </div>
 
-    <div class="section-header"><span class="section-title">Organización</span></div>
-    <div style="background:var(--surface);border-radius:var(--radius-lg);padding:1rem;margin-bottom:1.2rem">
-      <div style="display:flex;align-items:center;gap:0.75rem">
-        <div style="width:40px;height:40px;background:var(--primary);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:white">
-          ${(e.organization?.name || 'O')[0].toUpperCase()}
-        </div>
-        <div>
-          <div style="font-weight:600">${e.organization?.name || 'Organización'}</div>
-          <div style="color:var(--text-muted);font-size:0.85rem">ID: ${e.organization?.id || 'N/A'}</div>
-        </div>
-      </div>
+    ${Array.isArray(e.lineup) && e.lineup.length ? `
+    <div class="section-header"><span class="section-title">Lineup</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.5rem">
+      ${e.lineup.map(function(artist) { return '<span class="badge badge-glass" style="padding:0.5rem 0.85rem">🎧 ' + String(artist).replace(/</g, '&lt;') + '</span>'; }).join('')}
     </div>
+    ` : ''}
 
-    <div style="display:flex;gap:1rem;margin-top:2rem">
-      <button class="btn btn-primary" style="flex:1" onclick="navigate('tickets','${e.id}')">🎫 Comprar Entradas</button>
-      <button class="btn btn-outline" onclick="navigate('` + returnTo + `')">← Ver Todos</button>
-    </div>
-
-    <div style="margin-top:1.5rem">
-      <button class="btn btn-primary btn-full" onclick="navigate('tickets','${e.id}')">🎫 Comprar Entradas</button>
-      <button class="btn btn-outline btn-full" style="margin-top:0.5rem" onclick="shareEvent('${e.id}')">📤 Compartir Evento</button>
+    <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:1.5rem">
+      <button class="btn btn-primary btn-full" onclick="navigate('contact')">✉️ Consultar por este evento</button>
+      <button class="btn btn-outline btn-full" onclick="shareEvent('${e.id}')">📤 Compartir evento</button>
+      <button class="btn btn-ghost btn-full" onclick="navigate('` + returnTo + `')">← Ver todos los eventos</button>
       ${editEventBtn}
     </div>
   `;
@@ -921,55 +882,57 @@ function shareEvent(id) {
 }
 
 // ── ARTISTS PAGE ──────────────────────────────────────────────────────────────
-async function renderArtists(filter = 'all') {
+async function renderArtists(filter) {
+  if (typeof filter !== 'string') filter = 'all';
   const el = document.getElementById('page-artists');
   const content = el.querySelector('.page-content');
-  
-  // Show loading state
   content.innerHTML = renderPortalLoader('Invocando artistas...');
-  
+
   try {
-    // Mock artists data for now (would come from backend API)
-    const artists = [
-      { id: 1, name: "Nebula Flux", role: "Headliner", genre: "High Velocity Techno", emoji: "🎧" },
-      { id: 2, name: "Cosmic Ray", role: "Resident", genre: "Psychedelic Dub", emoji: "🌀" },
-      { id: 3, name: "Astral Void", role: "Special Guest", genre: "Ethereal Vocals", emoji: "🎤" },
-      { id: 4, name: "Solar Flare", role: "Rising Star", genre: "Acid House", emoji: "⚡" },
-      { id: 5, name: "Luna Edge", role: "Top Performer", genre: "Dark Techno", emoji: "🌙" }
-    ];
-    
-    const genres = ['all', 'Techno', 'Psytrance', 'Ambient', 'House'];
-    let filteredArtists = artists;
-    if (filter !== 'all') filteredArtists = artists.filter(a => a.genre.toLowerCase().includes(filter.toLowerCase()));
+    const response = await window.DataSource.getArtists();
+    const artists = Array.isArray(response.data) ? response.data : [];
+
+    if (artists.length === 0) {
+      content.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🎧</div>
+          <div class="empty-title">Sin artistas cargados todavía</div>
+          <div style="color:var(--text-muted);margin-top:0.5rem;font-size:0.85rem">Cargá el primero desde el panel Admin</div>
+        </div>`;
+      return;
+    }
+
+    // Géneros dinámicos a partir de la data real
+    const genreSet = {};
+    artists.forEach(function (a) { if (a.genre) genreSet[a.genre] = true; });
+    const genres = ['all'].concat(Object.keys(genreSet));
+
+    const filteredArtists = filter === 'all'
+      ? artists
+      : artists.filter(function (a) { return (a.genre || '').toLowerCase().indexOf(filter.toLowerCase()) !== -1; });
+
+    const safe = function (s) { return String(s == null ? '' : s).replace(/</g, '&lt;'); };
 
     content.innerHTML = `
       <div style="display:flex;gap:0.5rem;overflow-x:auto;margin-bottom:1.2rem;padding-bottom:0.3rem">
-        ${genres.map(g => `<button class="btn ${filter===g?'btn-primary':'btn-ghost'}" style="flex-shrink:0;padding:0.4rem 1rem;font-size:0.8rem" onclick="renderArtists('${g}')">${g==='all'?'Todos':g}</button>`).join('')}
+        ${genres.map(function (g) { return '<button class="btn ' + (filter === g ? 'btn-primary' : 'btn-ghost') + '" style="flex-shrink:0;padding:0.4rem 1rem;font-size:0.8rem" onclick="renderArtists(\'' + g.replace(/'/g, "\\'") + '\')">' + (g === 'all' ? 'Todos' : safe(g)) + '</button>'; }).join('')}
       </div>
 
-      <div class="section-header"><span class="section-title">Estrellas del Universo</span></div>
       <div class="artist-grid">
-        ${filteredArtists.map(a => `
-          <div class="artist-card" onclick="navigate('artist-detail', ${a.id})">
-            <div class="artist-img-placeholder">${a.emoji}</div>
-            <div class="artist-overlay">
-              <div class="artist-role">${a.role}</div>
-              <div class="artist-name">${a.name}</div>
-              <div class="artist-genre">🎵 ${a.genre}</div>
-            </div>
-          </div>`).join('')}
-      </div>
-
-      <div class="section-header" style="margin-top:1.5rem"><span class="section-title">Top Performers</span></div>
-      <div class="h-scroll">
-        ${artists.sort((a,b) => Math.random() - 0.5).slice(0,6).map((a,i) => `
-          <div class="circle-avatar" onclick="navigate('artist-detail',${a.id})">
-            <div class="circle-avatar-img ${i===0?'active-border':''}">${a.emoji}</div>
-            <div class="circle-avatar-name">${a.name.split(' ')[0]}</div>
-          </div>`).join('')}
+        ${filteredArtists.map(function (a) {
+          const img = a.photo
+            ? '<img src="' + String(a.photo).replace(/"/g, '&quot;') + '" alt="" style="width:100%;height:100%;object-fit:cover">'
+            : (a.emoji || '🎧');
+          return '<div class="artist-card" onclick="navigate(\'artist-detail\',\'' + String(a.id).replace(/'/g, "\\'") + '\')">'
+            + '<div class="artist-img-placeholder">' + img + '</div>'
+            + '<div class="artist-overlay">'
+            + '<div class="artist-role">' + safe(a.role || '') + '</div>'
+            + '<div class="artist-name">' + safe(a.name) + '</div>'
+            + '<div class="artist-genre">🎵 ' + safe(a.genre || '') + '</div>'
+            + '</div></div>';
+        }).join('')}
       </div>
     `;
-    
   } catch (error) {
     console.error('Error loading artists:', error);
     content.innerHTML = `
@@ -985,53 +948,185 @@ async function renderArtists(filter = 'all') {
 async function renderArtistDetail(artistId) {
   const el = document.getElementById('page-artist-detail');
   const content = el.querySelector('.page-content');
-  
-  // Mock artist data for now (would come from backend API)
-  const artists = [
-    { id: 1, name: "Nebula Flux", role: "Headliner", genre: "High Velocity Techno", emoji: "🎧", bio: "DJ referente del techno underground europeo. Conocido por sus sets de alta energía y técnica impecable." },
-    { id: 2, name: "Cosmic Ray", role: "Resident", genre: "Psychedelic Dub", emoji: "🌀", bio: "Residente histórico de Paraíso Astral. Maestro del dub psicodélico y las texturas sonoras." },
-    { id: 3, name: "Astral Void", role: "Special Guest", genre: "Ethereal Vocals", emoji: "🎤", bio: "Vocalista electrónica con presencia escénica única. Sus performances fusionan música y arte visual." },
-    { id: 4, name: "Solar Flare", role: "Rising Star", genre: "Acid House", emoji: "⚡", bio: "La estrella emergente del circuito underground. Su sonido ácido y contundente está conquistando los clubs." },
-    { id: 5, name: "Luna Edge", role: "Top Performer", genre: "Dark Techno", emoji: "🌙", bio: "Una de las artistas más versátiles de la escena. Sus sets nocturnos son experiencias transformadoras." }
-  ];
-  
-  const a = artists.find(x => x.id === artistId);
-  if (!a) return;
-  
-  // Mock events for this artist (would come from backend)
-  const artistEvents = [
-    { id: 1, title: "Neon Nebula Rave", venue: "Cosmic Dome, Sector 7", startAt: new Date('2024-10-04T22:00:00Z') },
-    { id: 2, title: "Interstellar Rave 2024", venue: "Galactic Station V", startAt: new Date('2024-12-14T22:00:00Z') }
-  ].filter(e => e.title.includes(a.name));
+  content.innerHTML = renderPortalLoader('Cargando artista...');
 
-  content.innerHTML = `
-    <button onclick="navigate('artists')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
-    <div style="text-align:center;margin-bottom:1.5rem">
-      <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6b1a8a);border:3px solid var(--primary);margin:0 auto 1rem;display:flex;align-items:center;justify-content:center;font-size:3.5rem;box-shadow:0 0 30px var(--primary-glow)">${a.emoji}</div>
-      <span class="badge badge-glass" style="margin-bottom:0.5rem">${a.role}</span>
-      <h2 style="font-size:1.8rem;font-weight:900;margin-bottom:0.3rem">${a.name}</h2>
-      <div style="color:var(--primary);font-size:0.9rem;font-weight:600">🎵 ${a.genre}</div>
-      <div style="color:var(--text-muted);font-size:0.8rem;margin-top:0.3rem">👥 ${(Math.random() * 50 + 10).toFixed(1)}k seguidores</div>
-    </div>
-    <div class="glass-card" style="padding:1.2rem;margin-bottom:1.5rem">
-      <h3 style="font-family:var(--font-display);font-size:0.8rem;margin-bottom:0.5rem;color:var(--primary)">BIO</h3>
-      <p style="font-size:0.9rem;line-height:1.7;color:rgba(240,230,255,0.8)">${a.bio}</p>
-    </div>
-    <div class="section-header"><span class="section-title">Próximas Actuaciones</span></div>
-    ${artistEvents.length === 0 ? '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos próximos</div></div>' :
-      artistEvents.map(e => `
-        <div class="list-item" onclick="navigate('event-detail','${e.id}')">
-          <div style="background:rgba(209,37,244,0.15);border:1px solid var(--border);border-radius:var(--radius);padding:0.4rem 0.6rem;text-align:center;flex-shrink:0">
-            <div style="font-size:0.55rem;text-transform:uppercase;color:var(--primary);font-weight:700">${new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short' })}</div>
-            <div style="font-family:var(--font-display);font-size:1.2rem;font-weight:800;line-height:1">${new Date(e.startAt).getDate()}</div>
-          </div>
-          <div class="list-body"><div class="list-title">${e.title}</div><div class="list-subtitle">${e.venue} · ${new Date(e.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div></div>
-          <span style="color:var(--primary)">›</span>
-        </div>`).join('')}
-    <div style="margin-top:1.5rem">
-      <button class="btn btn-primary btn-full" onclick="toast('📤 Perfil compartido!')">📤 Compartir Artista</button>
-    </div>
-  `;
+  try {
+    const res = await window.DataSource.getArtist(artistId);
+    const a = res && res.data;
+
+    if (!a) {
+      content.innerHTML = `
+        <button onclick="navigate('artists')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
+        <div class="empty-state">
+          <div class="empty-icon">🎧</div>
+          <div class="empty-title">Artista no encontrado</div>
+        </div>`;
+      return;
+    }
+
+    // Eventos donde toca este artista: cruzamos con la lista de eventos.
+    const evRes = await window.DataSource.getEvents();
+    const allEvents = Array.isArray(evRes.data) ? evRes.data : [];
+    const artistEventIds = Array.isArray(a.events) ? a.events.map(String) : [];
+    const artistEvents = allEvents.filter(function (e) {
+      if (e.status !== 'PUBLISHED') return false;
+      if (artistEventIds.indexOf(String(e.id)) !== -1) return true;
+      // Fallback: si el lineup incluye el nombre.
+      return Array.isArray(e.lineup) && e.lineup.some(function (l) { return String(l).toLowerCase() === String(a.name).toLowerCase(); });
+    });
+
+    const safe = function (s) { return String(s == null ? '' : s).replace(/</g, '&lt;'); };
+    const socials = a.socials || {};
+    const avatarContent = a.photo
+      ? '<img src="' + String(a.photo).replace(/"/g, '&quot;') + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
+      : (a.emoji || '🎧');
+
+    const socialLinks = [
+      { key: 'instagram', label: 'Instagram', icon: '📷' },
+      { key: 'soundcloud', label: 'SoundCloud', icon: '☁️' },
+      { key: 'spotify', label: 'Spotify', icon: '🎶' }
+    ]
+      .filter(function (s) { return socials[s.key]; })
+      .map(function (s) {
+        return '<a href="' + String(socials[s.key]).replace(/"/g, '&quot;') + '" target="_blank" rel="noopener" class="btn btn-outline" style="font-size:0.8rem;padding:0.5rem 0.85rem">' + s.icon + ' ' + s.label + '</a>';
+      }).join('');
+
+    content.innerHTML = `
+      <button onclick="navigate('artists')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
+      <div style="text-align:center;margin-bottom:1.5rem">
+        <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6b1a8a);border:3px solid var(--primary);margin:0 auto 1rem;display:flex;align-items:center;justify-content:center;font-size:3.5rem;overflow:hidden;box-shadow:0 0 30px var(--primary-glow)">${avatarContent}</div>
+        ${a.role ? `<span class="badge badge-glass" style="margin-bottom:0.5rem">${safe(a.role)}</span>` : ''}
+        <h2 style="font-size:1.8rem;font-weight:900;margin:0.5rem 0 0.3rem">${safe(a.name)}</h2>
+        ${a.genre ? `<div style="color:var(--primary);font-size:0.9rem;font-weight:600">🎵 ${safe(a.genre)}</div>` : ''}
+      </div>
+
+      ${a.bio ? `
+      <div class="glass-card" style="padding:1.2rem;margin-bottom:1.5rem">
+        <h3 style="font-family:var(--font-display);font-size:0.8rem;margin-bottom:0.5rem;color:var(--primary)">BIO</h3>
+        <p style="font-size:0.9rem;line-height:1.7;color:rgba(240,230,255,0.8)">${safe(a.bio)}</p>
+      </div>` : ''}
+
+      ${socialLinks ? `
+      <div class="section-header"><span class="section-title">Redes</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.5rem">${socialLinks}</div>
+      ` : ''}
+
+      <div class="section-header"><span class="section-title">Próximas actuaciones</span></div>
+      ${artistEvents.length === 0
+        ? '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos próximos</div></div>'
+        : artistEvents.map(function (e) {
+            return '<div class="list-item" onclick="navigate(\'event-detail\',\'' + String(e.id).replace(/'/g, "\\'") + '\')">'
+              + '<div style="background:rgba(209,37,244,0.15);border:1px solid var(--border);border-radius:var(--radius);padding:0.4rem 0.6rem;text-align:center;flex-shrink:0">'
+              + '<div style="font-size:0.55rem;text-transform:uppercase;color:var(--primary);font-weight:700">' + new Date(e.startAt).toLocaleDateString('es-ES', { month: 'short' }) + '</div>'
+              + '<div style="font-family:var(--font-display);font-size:1.2rem;font-weight:800;line-height:1">' + new Date(e.startAt).getDate() + '</div>'
+              + '</div>'
+              + '<div class="list-body"><div class="list-title">' + safe(e.title) + '</div><div class="list-subtitle">' + safe(e.venue || '') + '</div></div>'
+              + '<span style="color:var(--primary)">›</span>'
+              + '</div>';
+          }).join('')}
+    `;
+  } catch (error) {
+    console.error('Error loading artist detail:', error);
+    content.innerHTML = `
+      <button onclick="navigate('artists')" style="display:flex;align-items:center;gap:0.5rem;color:var(--primary);background:none;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:1rem">← Volver</button>
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <div class="empty-title">Error al cargar artista</div>
+      </div>`;
+  }
+}
+
+// ── CONTACT PAGE ─────────────────────────────────────────────────────────────
+async function renderContact() {
+  const el = document.getElementById('page-contact');
+  const content = el.querySelector('.page-content');
+  content.innerHTML = renderPortalLoader('Abriendo canal de contacto...');
+
+  try {
+    const res = await window.DataSource.getSiteConfig();
+    const cfg = (res && res.data) || {};
+    const contact = cfg.contact || {};
+    const socials = cfg.socials || {};
+    const safe = function (s) { return String(s == null ? '' : s).replace(/</g, '&lt;'); };
+
+    const contactRows = [];
+    if (contact.email) {
+      contactRows.push(
+        '<a class="list-item" href="mailto:' + String(contact.email).replace(/"/g, '&quot;') + '" style="text-decoration:none;color:inherit">'
+        + '<div style="font-size:1.5rem;flex-shrink:0">✉️</div>'
+        + '<div class="list-body"><div class="list-title">Email</div><div class="list-subtitle">' + safe(contact.email) + '</div></div>'
+        + '<span style="color:var(--primary)">›</span></a>'
+      );
+    }
+    if (contact.whatsapp) {
+      const waRaw = String(contact.whatsapp).replace(/[^0-9]/g, '');
+      contactRows.push(
+        '<a class="list-item" href="https://wa.me/' + waRaw + '" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">'
+        + '<div style="font-size:1.5rem;flex-shrink:0">💬</div>'
+        + '<div class="list-body"><div class="list-title">WhatsApp</div><div class="list-subtitle">' + safe(contact.whatsapp) + '</div></div>'
+        + '<span style="color:var(--primary)">›</span></a>'
+      );
+    }
+    if (contact.phone) {
+      contactRows.push(
+        '<a class="list-item" href="tel:' + String(contact.phone).replace(/[^0-9+]/g, '') + '" style="text-decoration:none;color:inherit">'
+        + '<div style="font-size:1.5rem;flex-shrink:0">📞</div>'
+        + '<div class="list-body"><div class="list-title">Teléfono</div><div class="list-subtitle">' + safe(contact.phone) + '</div></div>'
+        + '<span style="color:var(--primary)">›</span></a>'
+      );
+    }
+
+    const socialDefs = [
+      { key: 'instagram', label: 'Instagram', icon: '📷' },
+      { key: 'facebook', label: 'Facebook', icon: '📘' },
+      { key: 'soundcloud', label: 'SoundCloud', icon: '☁️' },
+      { key: 'spotify', label: 'Spotify', icon: '🎶' },
+      { key: 'youtube', label: 'YouTube', icon: '▶️' }
+    ];
+    const socialBtns = socialDefs
+      .filter(function (s) { return socials[s.key]; })
+      .map(function (s) {
+        return '<a href="' + String(socials[s.key]).replace(/"/g, '&quot;') + '" target="_blank" rel="noopener" class="btn btn-outline" style="font-size:0.85rem;padding:0.6rem 1rem">' + s.icon + ' ' + s.label + '</a>';
+      }).join('');
+
+    const hasAnyContact = contactRows.length > 0;
+    const hasAnySocial = socialBtns.length > 0;
+
+    content.innerHTML = `
+      <div style="text-align:center;margin-bottom:1.5rem">
+        <div style="font-size:3rem;margin-bottom:0.5rem">✉️</div>
+        <h1 style="font-family:var(--font-display);font-size:1.6rem;font-weight:900;margin:0">Contacto</h1>
+        <p style="color:var(--text-muted);margin:0.5rem 0 0;font-size:0.9rem">Booking, prensa, colaboraciones</p>
+      </div>
+
+      ${hasAnyContact ? `
+      <div class="section-header"><span class="section-title">Directo</span></div>
+      <div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:1.5rem">
+        ${contactRows.join('')}
+      </div>
+      ` : `
+      <div class="empty-state" style="margin-bottom:1.5rem">
+        <div class="empty-icon">📮</div>
+        <div class="empty-title">Configurá tus datos de contacto</div>
+        <div style="color:var(--text-muted);margin-top:0.5rem;font-size:0.85rem">Desde el panel Admin → Configuración</div>
+      </div>
+      `}
+
+      ${hasAnySocial ? `
+      <div class="section-header"><span class="section-title">Redes</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.5rem">
+        ${socialBtns}
+      </div>
+      ` : ''}
+    `;
+  } catch (error) {
+    console.error('Error loading contact:', error);
+    content.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <div class="empty-title">Error al cargar contacto</div>
+      </div>`;
+  }
 }
 
 // ── TICKETS PAGE ──────────────────────────────────────────────────────────────
@@ -1215,117 +1310,555 @@ function updateNotifBadge() {
 }
 
 // ── ADMIN PAGE ────────────────────────────────────────────────────────────────
+// Shell del panel admin + tabs Eventos / Artistas / Config.
+// Los writes van contra FirestoreClient (requiere custom claim admin:true).
+
+var AdminState = { tab: 'dashboard' };
+
 async function renderAdmin() {
   const el = document.getElementById('page-admin');
   const content = el.querySelector('.page-content');
-  
-  // Show loading state
   showLoading(content, 'Cargando panel administrativo...');
-  
+
   try {
-    // Usar usuario de estado global o refrescar desde /api/me
-    var user = AppState.currentUser;
-    if (!user) {
-      var userResponse = await window.ApiClient.get('/api/me');
-      user = userResponse.data;
-      AppState.currentUser = user;
+    const [evRes, arRes, cfgRes] = await Promise.all([
+      window.DataSource.getEvents(),
+      window.DataSource.getArtists(),
+      window.DataSource.getSiteConfig()
+    ]);
+    const events = Array.isArray(evRes.data) ? evRes.data : [];
+    const artists = Array.isArray(arRes.data) ? arRes.data : [];
+    const cfg = cfgRes.data || {};
+
+    // Usuario desde Firebase Auth
+    var user = null;
+    if (window.firebaseAuth && window.firebaseAuth.currentUser) {
+      user = window.firebaseAuth.currentUser;
+    }
+    const displayName = user ? (user.displayName || user.email || 'Admin') : 'Admin';
+    const firestoreOk = window.FirestoreClient && window.FirestoreClient.isAvailable && window.FirestoreClient.isAvailable();
+    const safe = function (s) { return String(s == null ? '' : s).replace(/</g, '&lt;'); };
+
+    // Tabs
+    const tabs = [
+      { id: 'dashboard', label: 'Resumen', icon: '📊' },
+      { id: 'events', label: 'Eventos', icon: '📅' },
+      { id: 'artists', label: 'Artistas', icon: '🎵' },
+      { id: 'config', label: 'Configuración', icon: '⚙️' }
+    ];
+    const activeTab = AdminState.tab || 'dashboard';
+
+    const tabsHtml = `
+      <div style="display:flex;gap:0.4rem;overflow-x:auto;margin-bottom:1.2rem;padding-bottom:0.3rem">
+        ${tabs.map(function (t) {
+          return '<button class="btn ' + (activeTab === t.id ? 'btn-primary' : 'btn-ghost') + '" style="flex-shrink:0;padding:0.5rem 0.85rem;font-size:0.8rem" onclick="adminSwitchTab(\'' + t.id + '\')">' + t.icon + ' ' + t.label + '</button>';
+        }).join('')}
+      </div>
+    `;
+
+    // Contenido del tab
+    var tabContent = '';
+    if (activeTab === 'dashboard') {
+      const publishedEvents = events.filter(function (e) { return e.status === 'PUBLISHED'; }).length;
+      const now = new Date();
+      const upcomingEvents = events.filter(function (e) { return new Date(e.startAt) > now; }).length;
+      tabContent = `
+        ${!firestoreOk ? `
+        <div class="card" style="padding:0.85rem 1rem;margin-bottom:1rem;border-color:var(--pink);background:rgba(255,0,64,0.1)">
+          <div style="font-weight:700;font-size:0.85rem;margin-bottom:0.25rem">⚠️ Firestore no disponible</div>
+          <div style="font-size:0.78rem;color:var(--text-muted)">Los datos que ves son mock. Verificá que Firebase esté configurado correctamente en .env y recargá.</div>
+        </div>
+        ` : ''}
+        <div class="stats-grid" style="margin-bottom:1.5rem">
+          <div class="stat-card glow-card">
+            <div class="stat-label">Eventos</div>
+            <div class="stat-value">${events.length}</div>
+            <div class="stat-change stat-up">${publishedEvents} publicados</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Próximos</div>
+            <div class="stat-value">${upcomingEvents}</div>
+            <div class="stat-change stat-up">Por venir</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Artistas</div>
+            <div class="stat-value">${artists.length}</div>
+            <div class="stat-change stat-up">Cargados</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Estado</div>
+            <div class="stat-value" style="font-size:1rem">${firestoreOk ? '🟢 Firestore' : '🟡 Mock'}</div>
+          </div>
+        </div>
+        <div class="glass-card" style="padding:1.2rem">
+          <div style="display:grid;grid-template-columns:1fr;gap:0.5rem">
+            <button class="btn btn-primary" onclick="adminSwitchTab('events')">📅 Gestionar eventos</button>
+            <button class="btn btn-primary" onclick="adminSwitchTab('artists')">🎵 Gestionar artistas</button>
+            <button class="btn btn-primary" onclick="adminSwitchTab('config')">⚙️ Configuración del sitio</button>
+            <button class="btn btn-ghost" onclick="navigate('home')">🏠 Volver al sitio</button>
+          </div>
+        </div>
+      `;
+    } else if (activeTab === 'events') {
+      tabContent = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+          <div style="font-weight:700">${events.length} evento${events.length === 1 ? '' : 's'}</div>
+          <button class="btn btn-primary" style="padding:0.5rem 0.85rem;font-size:0.85rem" onclick="adminEditEvent(null)">➕ Nuevo</button>
+        </div>
+        ${events.length === 0 ? '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos cargados</div></div>' :
+          '<div style="display:flex;flex-direction:column;gap:0.5rem">' +
+          events.map(function (e) {
+            return '<div class="card" style="padding:0.75rem 1rem;display:flex;align-items:center;gap:0.75rem">'
+              + '<div style="width:48px;height:48px;border-radius:var(--radius);background:linear-gradient(135deg,#1a0820,#2d0040);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;overflow:hidden">'
+              + (e.coverImage ? '<img src="' + String(e.coverImage).replace(/"/g, '&quot;') + '" style="width:100%;height:100%;object-fit:cover">' : '🌌')
+              + '</div>'
+              + '<div style="flex:1;min-width:0">'
+              + '<div style="font-weight:700;font-size:0.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + safe(e.title) + '</div>'
+              + '<div style="color:var(--text-muted);font-size:0.75rem">' + (e.startAt ? new Date(e.startAt).toLocaleDateString('es-ES') : '') + ' · ' + safe(e.venue || '') + '</div>'
+              + '<span class="badge badge-glass" style="margin-top:0.2rem;font-size:0.65rem">' + safe(e.status) + '</span>'
+              + '</div>'
+              + '<button class="btn btn-ghost" style="padding:0.4rem 0.55rem;font-size:0.75rem" onclick="adminEditEvent(\'' + String(e.id).replace(/'/g, "\\'") + '\')">✏️</button>'
+              + '<button class="btn btn-ghost" style="padding:0.4rem 0.55rem;font-size:0.75rem;color:var(--pink)" onclick="adminDeleteEvent(\'' + String(e.id).replace(/'/g, "\\'") + '\')">🗑️</button>'
+              + '</div>';
+          }).join('') + '</div>'}
+      `;
+    } else if (activeTab === 'artists') {
+      tabContent = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+          <div style="font-weight:700">${artists.length} artista${artists.length === 1 ? '' : 's'}</div>
+          <button class="btn btn-primary" style="padding:0.5rem 0.85rem;font-size:0.85rem" onclick="adminEditArtist(null)">➕ Nuevo</button>
+        </div>
+        ${artists.length === 0 ? '<div class="empty-state"><div class="empty-icon">🎧</div><div class="empty-title">Sin artistas cargados</div></div>' :
+          '<div style="display:flex;flex-direction:column;gap:0.5rem">' +
+          artists.map(function (a) {
+            return '<div class="card" style="padding:0.75rem 1rem;display:flex;align-items:center;gap:0.75rem">'
+              + '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6b1a8a);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;overflow:hidden">'
+              + (a.photo ? '<img src="' + String(a.photo).replace(/"/g, '&quot;') + '" style="width:100%;height:100%;object-fit:cover">' : (a.emoji || '🎧'))
+              + '</div>'
+              + '<div style="flex:1;min-width:0">'
+              + '<div style="font-weight:700;font-size:0.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + safe(a.name) + '</div>'
+              + '<div style="color:var(--text-muted);font-size:0.75rem">' + safe(a.role || '') + ' · ' + safe(a.genre || '') + '</div>'
+              + '</div>'
+              + '<button class="btn btn-ghost" style="padding:0.4rem 0.55rem;font-size:0.75rem" onclick="adminEditArtist(\'' + String(a.id).replace(/'/g, "\\'") + '\')">✏️</button>'
+              + '<button class="btn btn-ghost" style="padding:0.4rem 0.55rem;font-size:0.75rem;color:var(--pink)" onclick="adminDeleteArtist(\'' + String(a.id).replace(/'/g, "\\'") + '\')">🗑️</button>'
+              + '</div>';
+          }).join('') + '</div>'}
+      `;
+    } else if (activeTab === 'config') {
+      tabContent = adminRenderConfigForm(cfg);
     }
 
-    // Get events for admin stats (público)
-    const eventsResponse = await window.ApiClient.get('/api/events?_=' + Date.now(), { skipAuth: true });
-    const events = eventsResponse.data || [];
-    
-    // Calculate stats from real data
-    const totalEvents = events.length;
-    const publishedEvents = events.filter(e => e.status === 'PUBLISHED').length;
-    const upcomingEvents = events.filter(e => new Date(e.startAt) > new Date()).length;
-    
     content.innerHTML = `
-    <div class="admin-header-card">
-      <div style="position:relative;z-index:1">
-        <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.15em;opacity:0.8;margin-bottom:0.3rem">Panel Administrativo</div>
-        <h2 style="font-size:1.2rem;font-weight:900">👋 ${user.displayName || user.email}</h2>
-        <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem">
-          <span class="badge" style="background:rgba(255,255,255,0.2);color:white">🔴 ADMIN</span>
-          <span style="font-size:0.78rem;opacity:0.8">${new Date().toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'short'})}</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="section-header"><span class="section-title">Métricas Clave</span><span class="badge badge-live">LIVE</span></div>
-    <div class="stats-grid" style="margin-bottom:1.5rem">
-      <div class="stat-card glow-card">
-        <div class="stat-label">Total Eventos</div>
-        <div class="stat-value">${totalEvents}</div>
-        <div class="stat-change stat-up">� ${publishedEvents} Publicados</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Próximos</div>
-        <div class="stat-value">${upcomingEvents}</div>
-        <div class="stat-change stat-up">� Por venir</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Rol</div>
-        <div class="stat-value">${user.role}</div>
-        <div class="stat-change stat-up">� Administrador</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Estado</div>
-        <div class="stat-value">${user.status}</div>
-        <div class="stat-change stat-up">✅ Activo</div>
-      </div>
-    </div>
-
-    <div class="section-header"><span class="section-title">Gestión de Eventos</span></div>
-    <div class="glass-card" style="padding:1.2rem;margin-bottom:1.5rem">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem">
-        <div>
-          <div style="font-size:1.8rem;font-weight:900">${totalEvents}</div>
-          <div style="font-size:0.78rem;color:var(--text-muted)">Eventos totales</div>
-        </div>
-        <button class="btn btn-primary" onclick="if(window.AppState)window.AppState.editingEvent=null;openModal('modal-add-event')">
-          ➕ Nuevo Evento
-        </button>
-      </div>
-      
-      <div style="margin-top:1rem">
-        ${events.slice(0, 3).map(event => `
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem 0;border-bottom:1px solid var(--border)">
-            <div>
-              <div style="font-weight:600">${event.title}</div>
-              <div style="font-size:0.78rem;color:var(--text-muted)">${new Date(event.startAt).toLocaleDateString('es-ES')} • ${event.venue}</div>
-            </div>
-            <span class="badge ${event.status === 'PUBLISHED' ? 'badge-live' : 'badge-glass'}">
-              ${event.status}
-            </span>
+      <div class="admin-header-card">
+        <div style="position:relative;z-index:1">
+          <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.15em;opacity:0.8;margin-bottom:0.3rem">Panel Administrativo</div>
+          <h2 style="font-size:1.2rem;font-weight:900;word-break:break-word">👋 ${safe(displayName)}</h2>
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem;flex-wrap:wrap">
+            <span class="badge" style="background:rgba(255,255,255,0.2);color:white">🔴 ADMIN</span>
+            <button class="btn btn-ghost" style="padding:0.3rem 0.6rem;font-size:0.72rem" onclick="handleLogout()">🚪 Salir</button>
           </div>
-        `).join('')}
+        </div>
       </div>
-    </div>
 
-    <div class="section-header"><span class="section-title">Acciones Rápidas</span></div>
-    <div class="glass-card" style="padding:1.2rem">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-        <button class="btn btn-primary" onclick="navigate('events')">
-          📅 Ver Eventos
-        </button>
-        <button class="btn btn-outline" onclick="navigate('rrpp')">
-          👥 Gestión RRPP
-        </button>
-        <button class="btn btn-outline" onclick="testRBAC()">
-          🔐 Test RBAC
-        </button>
-        <button class="btn btn-outline" onclick="handleLogout()">
-          🚪 Cerrar Sesión
-        </button>
-      </div>
-    </div>
-  `;
-    
+      ${tabsHtml}
+      ${tabContent}
+    `;
   } catch (error) {
     console.error('Error loading admin panel:', error);
     showErrorState(content, 'Error al cargar panel administrativo', 'renderAdmin');
   }
+}
+
+function adminSwitchTab(tab) {
+  AdminState.tab = tab;
+  renderAdmin();
+}
+
+// ── Admin: Event form ────────────────────────────────────────────────────────
+async function adminEditEvent(eventId) {
+  var content = document.querySelector('#page-admin .page-content');
+  showLoading(content, eventId ? 'Cargando evento...' : 'Nuevo evento...');
+
+  var event = {
+    id: null, title: '', venue: '', startAt: '', endAt: '',
+    status: 'DRAFT', coverImage: '', description: '', lineup: [], tags: []
+  };
+  if (eventId) {
+    var res = await window.DataSource.getEvent(eventId);
+    if (res && res.data) {
+      event = Object.assign(event, res.data);
+      event.id = eventId;
+    }
+  }
+
+  var safe = function (s) { return String(s == null ? '' : s).replace(/"/g, '&quot;').replace(/</g, '&lt;'); };
+  var toDtLocal = function (iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  };
+
+  content.innerHTML = `
+    <button class="btn btn-ghost" style="margin-bottom:1rem" onclick="adminSwitchTab('events')">← Volver</button>
+    <h2 style="font-weight:900;margin-bottom:1rem">${eventId ? 'Editar evento' : 'Nuevo evento'}</h2>
+
+    <form id="event-form" style="display:flex;flex-direction:column;gap:0.85rem">
+      <div class="form-group">
+        <label>Título *</label>
+        <input class="input" name="title" required value="${safe(event.title)}" placeholder="Ej: Neon Nebula Rave">
+      </div>
+
+      <div class="form-group">
+        <label>Venue / Lugar</label>
+        <input class="input" name="venue" value="${safe(event.venue)}" placeholder="Nombre del club / venue">
+      </div>
+
+      <div class="form-group">
+        <label>Fecha y hora de inicio *</label>
+        <input class="input" type="datetime-local" name="startAt" required value="${toDtLocal(event.startAt)}">
+      </div>
+
+      <div class="form-group">
+        <label>Fecha y hora de fin (opcional)</label>
+        <input class="input" type="datetime-local" name="endAt" value="${toDtLocal(event.endAt)}">
+      </div>
+
+      <div class="form-group">
+        <label>Estado</label>
+        <select class="input" name="status">
+          <option value="DRAFT" ${event.status === 'DRAFT' ? 'selected' : ''}>Borrador (no público)</option>
+          <option value="PUBLISHED" ${event.status === 'PUBLISHED' ? 'selected' : ''}>Publicado</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Flyer (imagen)</label>
+        ${event.coverImage ? `<img src="${safe(event.coverImage)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius);margin-bottom:0.5rem">` : ''}
+        <input class="input" type="file" name="coverFile" accept="image/*">
+        <input type="hidden" name="coverImage" value="${safe(event.coverImage)}">
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.25rem">Se sube a Cloudinary al guardar.</div>
+      </div>
+
+      <div class="form-group">
+        <label>Descripción</label>
+        <textarea class="input" name="description" rows="4" placeholder="Contanos de qué va el evento...">${safe(event.description)}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Lineup (un artista por línea)</label>
+        <textarea class="input" name="lineup" rows="4" placeholder="Nebula Flux\nCosmic Ray\n...">${safe((event.lineup || []).join('\n'))}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Tags (separados por coma)</label>
+        <input class="input" name="tags" value="${safe((event.tags || []).join(', '))}" placeholder="Techno, Open Air">
+      </div>
+
+      <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+        <button class="btn btn-primary" type="submit" style="flex:1">💾 Guardar</button>
+        <button class="btn btn-ghost" type="button" onclick="adminSwitchTab('events')">Cancelar</button>
+      </div>
+    </form>
+  `;
+
+  document.getElementById('event-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    adminSaveEvent(eventId, ev.target);
+  });
+}
+
+async function adminSaveEvent(eventId, form) {
+  var fd = new FormData(form);
+  var coverFile = fd.get('coverFile');
+  var coverImage = fd.get('coverImage') || '';
+
+  // Si hay archivo, subimos a Cloudinary primero
+  if (coverFile && coverFile.size > 0) {
+    toast('📤 Subiendo imagen...');
+    var up = await window.CloudinaryClient.upload(coverFile, 'paraiso-astral/events');
+    if (up.status !== 'success') {
+      toast('❌ Error al subir imagen: ' + (up.message || ''));
+      return;
+    }
+    coverImage = up.data.url;
+  }
+
+  var payload = {
+    title: fd.get('title') || '',
+    venue: fd.get('venue') || '',
+    startAt: fd.get('startAt') ? new Date(fd.get('startAt')).toISOString() : null,
+    endAt: fd.get('endAt') ? new Date(fd.get('endAt')).toISOString() : null,
+    status: fd.get('status') || 'DRAFT',
+    coverImage: coverImage,
+    description: fd.get('description') || '',
+    lineup: (fd.get('lineup') || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean),
+    tags: (fd.get('tags') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+  };
+
+  toast('💾 Guardando evento...');
+  var res = await window.FirestoreClient.saveEvent(eventId, payload);
+  if (res.status !== 'success') {
+    toast('❌ ' + (res.message || 'Error al guardar'));
+    return;
+  }
+  toast('✅ Evento guardado');
+  AdminState.tab = 'events';
+  renderAdmin();
+}
+
+async function adminDeleteEvent(eventId) {
+  if (!confirm('¿Eliminar este evento? Esta acción no se puede deshacer.')) return;
+  toast('🗑️ Eliminando...');
+  var res = await window.FirestoreClient.deleteEvent(eventId);
+  if (res.status !== 'success') {
+    toast('❌ ' + (res.message || 'Error al eliminar'));
+    return;
+  }
+  toast('✅ Evento eliminado');
+  renderAdmin();
+}
+
+// ── Admin: Artist form ───────────────────────────────────────────────────────
+async function adminEditArtist(artistId) {
+  var content = document.querySelector('#page-admin .page-content');
+  showLoading(content, artistId ? 'Cargando artista...' : 'Nuevo artista...');
+
+  var artist = {
+    id: null, name: '', role: '', genre: '', emoji: '🎧',
+    photo: '', bio: '', events: [], socials: { instagram: '', soundcloud: '', spotify: '' }
+  };
+  if (artistId) {
+    var res = await window.DataSource.getArtist(artistId);
+    if (res && res.data) {
+      artist = Object.assign(artist, res.data);
+      artist.socials = artist.socials || { instagram: '', soundcloud: '', spotify: '' };
+      artist.id = artistId;
+    }
+  }
+
+  var safe = function (s) { return String(s == null ? '' : s).replace(/"/g, '&quot;').replace(/</g, '&lt;'); };
+
+  content.innerHTML = `
+    <button class="btn btn-ghost" style="margin-bottom:1rem" onclick="adminSwitchTab('artists')">← Volver</button>
+    <h2 style="font-weight:900;margin-bottom:1rem">${artistId ? 'Editar artista' : 'Nuevo artista'}</h2>
+
+    <form id="artist-form" style="display:flex;flex-direction:column;gap:0.85rem">
+      <div class="form-group">
+        <label>Nombre *</label>
+        <input class="input" name="name" required value="${safe(artist.name)}">
+      </div>
+
+      <div class="form-group">
+        <label>Rol</label>
+        <input class="input" name="role" value="${safe(artist.role)}" placeholder="Headliner / Resident / Guest">
+      </div>
+
+      <div class="form-group">
+        <label>Género</label>
+        <input class="input" name="genre" value="${safe(artist.genre)}" placeholder="Techno / House / Psytrance">
+      </div>
+
+      <div class="form-group">
+        <label>Emoji (si no hay foto)</label>
+        <input class="input" name="emoji" value="${safe(artist.emoji)}" maxlength="4">
+      </div>
+
+      <div class="form-group">
+        <label>Foto</label>
+        ${artist.photo ? `<img src="${safe(artist.photo)}" style="width:120px;height:120px;object-fit:cover;border-radius:50%;margin-bottom:0.5rem">` : ''}
+        <input class="input" type="file" name="photoFile" accept="image/*">
+        <input type="hidden" name="photo" value="${safe(artist.photo)}">
+      </div>
+
+      <div class="form-group">
+        <label>Bio</label>
+        <textarea class="input" name="bio" rows="4">${safe(artist.bio)}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Instagram</label>
+        <input class="input" name="instagram" value="${safe(artist.socials.instagram || '')}" placeholder="https://instagram.com/...">
+      </div>
+
+      <div class="form-group">
+        <label>SoundCloud</label>
+        <input class="input" name="soundcloud" value="${safe(artist.socials.soundcloud || '')}" placeholder="https://soundcloud.com/...">
+      </div>
+
+      <div class="form-group">
+        <label>Spotify</label>
+        <input class="input" name="spotify" value="${safe(artist.socials.spotify || '')}" placeholder="https://open.spotify.com/...">
+      </div>
+
+      <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+        <button class="btn btn-primary" type="submit" style="flex:1">💾 Guardar</button>
+        <button class="btn btn-ghost" type="button" onclick="adminSwitchTab('artists')">Cancelar</button>
+      </div>
+    </form>
+  `;
+
+  document.getElementById('artist-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    adminSaveArtist(artistId, ev.target);
+  });
+}
+
+async function adminSaveArtist(artistId, form) {
+  var fd = new FormData(form);
+  var photoFile = fd.get('photoFile');
+  var photo = fd.get('photo') || '';
+
+  if (photoFile && photoFile.size > 0) {
+    toast('📤 Subiendo foto...');
+    var up = await window.CloudinaryClient.upload(photoFile, 'paraiso-astral/artists');
+    if (up.status !== 'success') {
+      toast('❌ Error al subir foto: ' + (up.message || ''));
+      return;
+    }
+    photo = up.data.url;
+  }
+
+  var payload = {
+    name: fd.get('name') || '',
+    role: fd.get('role') || '',
+    genre: fd.get('genre') || '',
+    emoji: fd.get('emoji') || '🎧',
+    photo: photo,
+    bio: fd.get('bio') || '',
+    events: [],
+    socials: {
+      instagram: fd.get('instagram') || '',
+      soundcloud: fd.get('soundcloud') || '',
+      spotify: fd.get('spotify') || ''
+    }
+  };
+
+  toast('💾 Guardando...');
+  var res = await window.FirestoreClient.saveArtist(artistId, payload);
+  if (res.status !== 'success') {
+    toast('❌ ' + (res.message || 'Error al guardar'));
+    return;
+  }
+  toast('✅ Artista guardado');
+  AdminState.tab = 'artists';
+  renderAdmin();
+}
+
+async function adminDeleteArtist(artistId) {
+  if (!confirm('¿Eliminar este artista?')) return;
+  var res = await window.FirestoreClient.deleteArtist(artistId);
+  if (res.status !== 'success') {
+    toast('❌ ' + (res.message || 'Error al eliminar'));
+    return;
+  }
+  toast('✅ Artista eliminado');
+  renderAdmin();
+}
+
+// ── Admin: Site Config ───────────────────────────────────────────────────────
+function adminRenderConfigForm(cfg) {
+  var safe = function (s) { return String(s == null ? '' : s).replace(/"/g, '&quot;').replace(/</g, '&lt;'); };
+  var c = cfg.contact || {};
+  var s = cfg.socials || {};
+
+  return `
+    <form id="config-form" style="display:flex;flex-direction:column;gap:0.85rem">
+      <div class="card" style="padding:1rem">
+        <h3 style="font-size:0.85rem;margin-bottom:0.75rem;color:var(--primary)">PRODUCTORA</h3>
+        <div class="form-group">
+          <label>Nombre</label>
+          <input class="input" name="name" value="${safe(cfg.name || 'Paraíso Astral')}">
+        </div>
+        <div class="form-group">
+          <label>Tagline</label>
+          <input class="input" name="tagline" value="${safe(cfg.tagline || 'Electronic Universe')}">
+        </div>
+        <div class="form-group">
+          <label>Bio corta</label>
+          <textarea class="input" name="bio" rows="3">${safe(cfg.bio || '')}</textarea>
+        </div>
+        <div class="form-group">
+          <label>Hero image (URL de Cloudinary)</label>
+          ${cfg.heroImage ? `<img src="${safe(cfg.heroImage)}" style="width:100%;max-height:150px;object-fit:cover;border-radius:var(--radius);margin-bottom:0.5rem">` : ''}
+          <input class="input" type="file" name="heroFile" accept="image/*">
+          <input type="hidden" name="heroImage" value="${safe(cfg.heroImage || '')}">
+        </div>
+      </div>
+
+      <div class="card" style="padding:1rem">
+        <h3 style="font-size:0.85rem;margin-bottom:0.75rem;color:var(--primary)">CONTACTO</h3>
+        <div class="form-group">
+          <label>Email</label>
+          <input class="input" type="email" name="email" value="${safe(c.email || '')}">
+        </div>
+        <div class="form-group">
+          <label>WhatsApp (con código de país)</label>
+          <input class="input" name="whatsapp" value="${safe(c.whatsapp || '')}" placeholder="+54 9 11 1234-5678">
+        </div>
+        <div class="form-group">
+          <label>Teléfono</label>
+          <input class="input" name="phone" value="${safe(c.phone || '')}">
+        </div>
+      </div>
+
+      <div class="card" style="padding:1rem">
+        <h3 style="font-size:0.85rem;margin-bottom:0.75rem;color:var(--primary)">REDES</h3>
+        <div class="form-group"><label>Instagram</label><input class="input" name="instagram" value="${safe(s.instagram || '')}"></div>
+        <div class="form-group"><label>Facebook</label><input class="input" name="facebook" value="${safe(s.facebook || '')}"></div>
+        <div class="form-group"><label>SoundCloud</label><input class="input" name="soundcloud" value="${safe(s.soundcloud || '')}"></div>
+        <div class="form-group"><label>Spotify</label><input class="input" name="spotify" value="${safe(s.spotify || '')}"></div>
+        <div class="form-group"><label>YouTube</label><input class="input" name="youtube" value="${safe(s.youtube || '')}"></div>
+      </div>
+
+      <button class="btn btn-primary btn-full" type="submit" onclick="event.preventDefault();adminSaveConfig(document.getElementById('config-form'))">💾 Guardar configuración</button>
+    </form>
+  `;
+}
+
+async function adminSaveConfig(form) {
+  var fd = new FormData(form);
+  var heroFile = fd.get('heroFile');
+  var heroImage = fd.get('heroImage') || '';
+
+  if (heroFile && heroFile.size > 0) {
+    toast('📤 Subiendo hero image...');
+    var up = await window.CloudinaryClient.upload(heroFile, 'paraiso-astral/config');
+    if (up.status !== 'success') {
+      toast('❌ Error al subir: ' + (up.message || ''));
+      return;
+    }
+    heroImage = up.data.url;
+  }
+
+  var payload = {
+    name: fd.get('name') || 'Paraíso Astral',
+    tagline: fd.get('tagline') || '',
+    bio: fd.get('bio') || '',
+    logo: '',
+    heroImage: heroImage,
+    contact: {
+      email: fd.get('email') || '',
+      whatsapp: fd.get('whatsapp') || '',
+      phone: fd.get('phone') || ''
+    },
+    socials: {
+      instagram: fd.get('instagram') || '',
+      facebook: fd.get('facebook') || '',
+      soundcloud: fd.get('soundcloud') || '',
+      spotify: fd.get('spotify') || '',
+      youtube: fd.get('youtube') || ''
+    }
+  };
+
+  toast('💾 Guardando...');
+  var res = await window.FirestoreClient.saveSiteConfig(payload);
+  if (res.status !== 'success') {
+    toast('❌ ' + (res.message || 'Error al guardar'));
+    return;
+  }
+  toast('✅ Configuración guardada');
+  renderAdmin();
 }
 
 // ── RRPP PAGE ────────────────────────────────────────────────────────────────
@@ -1630,7 +2163,8 @@ function showRegister() {
 
 /**
  * Handle login form submission
- * signInWithEmailAndPassword → getIdToken() → GET /api/me con Authorization Bearer → guardar usuario en AppState
+ * Sólo Firebase Auth. El rol/admin se gestiona con custom claims (Fase 4);
+ * por ahora cualquier usuario autenticado ve el panel admin.
  */
 async function handleLogin(event) {
   event.preventDefault();
@@ -1646,7 +2180,6 @@ async function handleLogin(event) {
   errorDiv.style.display = 'none';
 
   try {
-    // 1) Login con Firebase (email + password)
     var result = await window.Auth.login(email, password);
     if (!result.success) {
       errorDiv.textContent = result.error;
@@ -1654,58 +2187,21 @@ async function handleLogin(event) {
       return;
     }
 
-    // 2) Obtener token con user.getIdToken()
-    var token = await window.Auth.getIdToken();
-    if (!token) {
-      errorDiv.textContent = 'Error al obtener token de autenticación';
-      errorDiv.style.display = 'block';
-      return;
-    }
+    // Guardamos una representación mínima del usuario desde Firebase Auth.
+    var fbUser = (window.firebaseAuth && window.firebaseAuth.currentUser) || null;
+    AppState.currentUser = fbUser
+      ? { id: fbUser.uid, email: fbUser.email, displayName: fbUser.displayName || fbUser.email }
+      : { email: email, displayName: email };
 
-    // 3) GET /api/me con header Authorization: Bearer <token>
-    var response = await window.ApiClient.get('/api/me');
-
-    // 4) Si response no es 200 / success → mostrar error y no permitir acceso
-    if (response.status !== 'success' || !response.data) {
-      await window.Auth.logout();
-      AppState.currentUser = null;
-      errorDiv.textContent = 'Error al validar usuario con el servidor';
-      errorDiv.style.display = 'block';
-      return;
-    }
-
-    // 5) Guardar en estado global (id, email, role, status, displayName, avatarUrl)
-    AppState.currentUser = response.data;
-    var userData = response.data;
-
-    toast('¡Bienvenido ' + (userData.displayName || userData.email) + '!');
+    toast('¡Bienvenido ' + (AppState.currentUser.displayName || email) + '!');
 
     var returnTo = pendingReturnTo;
     pendingReturnTo = null;
-
-    // 6) Render según rol
-    if (userData.role === 'ADMIN') {
-      navigate(returnTo || 'admin');
-    } else if (userData.role === 'ARTIST') {
-      navigate(returnTo || 'profile');
-    } else if (userData.role === 'PR') {
-      navigate(returnTo || 'rrpp');
-    } else {
-      navigate(returnTo || 'home');
-    }
+    navigate(returnTo || 'admin');
   } catch (error) {
-    await window.Auth.logout();
+    try { await window.Auth.logout(); } catch (_) {}
     AppState.currentUser = null;
-
-    if (error.message === 'Authentication required') {
-      errorDiv.textContent = 'Error de autenticación. Por favor intenta nuevamente.';
-    } else if (error.message === 'Access denied') {
-      errorDiv.textContent = 'No tienes permisos para acceder al sistema.';
-    } else if (error.message && error.message.indexOf('User not found') !== -1) {
-      errorDiv.textContent = 'Usuario no encontrado en el sistema. Contacta al administrador.';
-    } else {
-      errorDiv.textContent = error.message || 'Error de conexión. Intenta nuevamente.';
-    }
+    errorDiv.textContent = (error && error.message) ? error.message : 'Error al iniciar sesión. Intentá de nuevo.';
     errorDiv.style.display = 'block';
   } finally {
     btnText.style.display = 'inline';

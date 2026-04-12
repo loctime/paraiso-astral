@@ -50,8 +50,9 @@
     SESSION_TIMEOUT: 30 * 60 * 1000,
     LOADING_TIMEOUT: 10000,
     ERROR_DISPLAY_DURATION: 5000,
-    PROTECTED_ROUTES: ['admin', 'profile', 'rrpp'],
-    PUBLIC_ROUTES: ['login', 'register', 'home', 'events', 'artists', 'news', 'notifications']
+    // Solo admin requiere autenticación. El resto del sitio es público.
+    PROTECTED_ROUTES: ['admin'],
+    PUBLIC_ROUTES: ['login', 'register', 'home', 'events', 'event-detail', 'artists', 'artist-detail', 'contact']
   };
 
   if (typeof window !== 'undefined') {
