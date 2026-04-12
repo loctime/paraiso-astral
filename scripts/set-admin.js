@@ -27,15 +27,33 @@ const crypto = require('crypto');
 
 const admin = require('firebase-admin');
 
-const SERVICE_ACCOUNT_PATH = path.join(__dirname, '..', 'astral.serviceAccount.json');
+// Busca el service account en varios nombres de archivo comunes.
+const SERVICE_ACCOUNT_CANDIDATES = [
+  'paraiso-astral-serviceAccount.json',
+  'astral.serviceAccount.json',
+  'serviceAccount.json'
+];
 
-if (!fs.existsSync(SERVICE_ACCOUNT_PATH)) {
-  console.error('❌ No encontré el service account en:', SERVICE_ACCOUNT_PATH);
+let serviceAccountPath = null;
+for (const name of SERVICE_ACCOUNT_CANDIDATES) {
+  const p = path.join(__dirname, '..', name);
+  if (fs.existsSync(p)) { serviceAccountPath = p; break; }
+}
+
+if (!serviceAccountPath) {
+  console.error('❌ No encontré ningún service account en la raíz del repo.');
+  console.error('   Nombres buscados:', SERVICE_ACCOUNT_CANDIDATES.join(', '));
   console.error('   Descargalo desde Firebase Console → Project Settings → Service Accounts → Generate new private key');
   process.exit(1);
 }
 
-const serviceAccount = require(SERVICE_ACCOUNT_PATH);
+console.log('🔑 Usando service account:', path.basename(serviceAccountPath));
+
+const serviceAccount = require(serviceAccountPath);
+
+if (serviceAccount.project_id) {
+  console.log('📦 Proyecto:', serviceAccount.project_id);
+}
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
