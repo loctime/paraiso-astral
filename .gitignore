@@ -105,3 +105,5 @@ firebase-debug.log.*
 astral.serviceAccount.json
 backend/astral.serviceAccount.json
 
+
+claude_files/

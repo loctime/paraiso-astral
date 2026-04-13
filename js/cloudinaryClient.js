@@ -31,6 +31,13 @@
      * @param {string} folder - Carpeta opcional en Cloudinary
      */
     upload: async function (file, folder) {
+      console.log('[Cloudinary] upload() llamado', {
+        cloud_name: CLOUD_NAME,
+        upload_preset: UPLOAD_PRESET,
+        folder: folder || '(ninguna)',
+        file: file ? { name: file.name, size: file.size, type: file.type } : null
+      });
+
       if (!file) return fail('No se proporcionó archivo');
       if (!CLOUD_NAME) return fail('Cloudinary cloud_name no configurado');
       if (!UPLOAD_PRESET) return fail('Cloudinary upload preset no configurado');
@@ -41,13 +48,24 @@
       if (folder) fd.append('folder', folder);
 
       var url = 'https://api.cloudinary.com/v1_1/' + CLOUD_NAME + '/image/upload';
+      console.log('[Cloudinary] POST', url);
+
       try {
         var res = await fetch(url, { method: 'POST', body: fd });
+        console.log('[Cloudinary] respuesta HTTP', res.status, res.statusText);
+
         if (!res.ok) {
           var errText = await res.text();
+          console.error('[Cloudinary] error body:', errText);
+          try {
+            var errJson = JSON.parse(errText);
+            console.error('[Cloudinary] error detallado:', errJson);
+          } catch (_) {}
           return fail('Cloudinary error ' + res.status + ': ' + errText);
         }
+
         var json = await res.json();
+        console.log('[Cloudinary] upload exitoso:', { secure_url: json.secure_url, public_id: json.public_id });
         return ok({
           url: json.secure_url,
           publicId: json.public_id,
@@ -56,6 +74,7 @@
           format: json.format
         });
       } catch (err) {
+        console.error('[Cloudinary] excepción en fetch:', err);
         return fail(err && err.message);
       }
     }
