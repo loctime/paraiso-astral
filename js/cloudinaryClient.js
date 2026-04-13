@@ -13,10 +13,8 @@
 (function () {
   'use strict';
 
-  // Valores leídos del entorno si están disponibles; si no, defaults del proyecto.
-  var ENV = typeof window !== 'undefined' ? (window.__ENV__ || {}) : {};
-  var CLOUD_NAME = ENV.VITE_CLOUDINARY_CLOUD_NAME || 'dbihuauip';
-  var UPLOAD_PRESET = ENV.VITE_CLOUDINARY_UPLOAD_PRESET || 'paraiso_astral';
+  var CLOUD_NAME = 'dbihuauip';
+  var UPLOAD_PRESET = 'paraiso_astral';
 
   function ok(data) { return { status: 'success', data: data }; }
   function fail(message) { return { status: 'error', data: null, message: message || 'Error' }; }
