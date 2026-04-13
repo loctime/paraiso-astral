@@ -45,6 +45,7 @@
       emoji: d.emoji || '🎧',
       photo: d.photo || '',
       bio: d.bio || '',
+      trackUrl: d.trackUrl || '',
       events: Array.isArray(d.events) ? d.events : [],
       socials: d.socials || {}
     };
@@ -184,6 +185,7 @@
           emoji: data.emoji || '🎧',
           photo: data.photo || '',
           bio: data.bio || '',
+          trackUrl: data.trackUrl || '',
           events: Array.isArray(data.events) ? data.events : [],
           socials: data.socials || {},
           updatedAt: fsTs

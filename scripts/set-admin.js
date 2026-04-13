@@ -5,11 +5,11 @@
  * reglas de seguridad.
  *
  * Uso:
- *   node scripts/set-admin.js <email> [password]
+ *   node scripts/set-admin.js
  *
- *   - Si se pasa password, se usa esa.
- *   - Si no se pasa y el usuario no existe, se genera una temporal aleatoria.
- *   - Si el usuario ya existe, password se ignora.
+ *   - El email y la contraseña se configuran editando las constantes
+ *     ADMIN_EMAIL y ADMIN_PASSWORD al principio de este archivo.
+ *   - Si el usuario ya existe, la contraseña se ignora.
  *
  * Además imprime un "password reset link" al final para que puedas setear
  * tu propia contraseña sin depender de la temporal.
@@ -24,6 +24,9 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+
+const ADMIN_EMAIL = 'tu-email@ejemplo.com';
+const ADMIN_PASSWORD = 'tu-contraseña-aqui';
 
 const admin = require('firebase-admin');
 
@@ -67,13 +70,8 @@ function generatePassword() {
 }
 
 async function main() {
-  const email = process.argv[2];
-  const providedPassword = process.argv[3];
-
-  if (!email) {
-    console.error('Uso: node scripts/set-admin.js <email> [password]');
-    process.exit(1);
-  }
+  const email = ADMIN_EMAIL;
+  const providedPassword = ADMIN_PASSWORD;
 
   let user;
   let wasCreated = false;

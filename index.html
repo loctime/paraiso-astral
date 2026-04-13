@@ -44,7 +44,11 @@
         <div class="logo-sub">Electronic Universe</div>
       </div>
     </div>
-    <div class="header-actions">
+    <div class="header-actions" style="display:flex;align-items:center;gap:0.5rem">
+      <div id="header-player" style="display:none;align-items:center;gap:0.5rem">
+        <div id="header-player-avatar" style="width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1.5px solid var(--primary);background:linear-gradient(135deg,var(--primary),#6b1a8a);display:flex;align-items:center;justify-content:center;font-size:1rem"></div>
+        <button id="header-player-btn" onclick="togglePlay()" style="background:none;border:none;cursor:pointer;font-size:1.3rem;color:var(--primary);padding:0;line-height:1" aria-label="Play/Pause">▶</button>
+      </div>
       <button class="icon-btn" onclick="navigate('contact')" title="Contacto" aria-label="Contacto">✉️</button>
     </div>
   </header>

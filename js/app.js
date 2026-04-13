@@ -5,6 +5,91 @@ var AppState = {
   currentUser: null
 };
 window.AppState = AppState;
+
+// ── PLAYER STATE ─────────────────────────────────────────────────────────────
+var PlayerState = {
+  trackUrl: null,
+  artistName: null,
+  artistPhoto: null,
+  isPlaying: false,
+  element: null  // referencia al <audio> DOM
+};
+
+function initPlayer() {
+  var audio = document.createElement('audio');
+  audio.id = 'global-audio';
+  audio.preload = 'none';
+  document.body.appendChild(audio);
+  PlayerState.element = audio;
+
+  audio.addEventListener('play', function () {
+    PlayerState.isPlaying = true;
+    var btn = document.getElementById('header-player-btn');
+    if (btn) btn.textContent = '⏸';
+  });
+
+  audio.addEventListener('pause', function () {
+    PlayerState.isPlaying = false;
+    var btn = document.getElementById('header-player-btn');
+    if (btn) btn.textContent = '▶';
+  });
+
+  audio.addEventListener('ended', function () {
+    PlayerState.isPlaying = false;
+    var btn = document.getElementById('header-player-btn');
+    if (btn) btn.textContent = '▶';
+  });
+}
+
+function playArtistTrack(trackUrl, artistName, artistPhoto) {
+  var audio = PlayerState.element;
+  if (!audio) return;
+
+  var isSameTrack = PlayerState.trackUrl === trackUrl;
+
+  // Si es el mismo track y está sonando, pausar (toggle)
+  if (isSameTrack && !audio.paused) {
+    audio.pause();
+    return;
+  }
+
+  // Cargar nuevo track si cambió
+  if (!isSameTrack) {
+    audio.src = trackUrl;
+    PlayerState.trackUrl = trackUrl;
+    PlayerState.artistName = artistName;
+    PlayerState.artistPhoto = artistPhoto;
+
+    var avatar = document.getElementById('header-player-avatar');
+    if (avatar) {
+      if (artistPhoto) {
+        avatar.innerHTML = '<img src="' + String(artistPhoto).replace(/"/g, '&quot;') + '" style="width:100%;height:100%;object-fit:cover">';
+      } else {
+        avatar.innerHTML = '🎧';
+      }
+    }
+  }
+
+  // Mostrar controles en header
+  var playerEl = document.getElementById('header-player');
+  if (playerEl) playerEl.style.display = 'flex';
+
+  audio.play().catch(function (err) {
+    console.warn('[Player] No se pudo reproducir:', err);
+  });
+}
+
+function togglePlay() {
+  var audio = PlayerState.element;
+  if (!audio || !PlayerState.trackUrl) return;
+  if (audio.paused) {
+    audio.play().catch(function (err) {
+      console.warn('[Player] No se pudo reproducir:', err);
+    });
+  } else {
+    audio.pause();
+  }
+}
 var pendingReturnTo = null;
 
 // ── ROUTE GUARD ──────────────────────────────────────────────────────────────────
@@ -174,6 +259,9 @@ function showErrorState(container, message, retryCallback = null, actionButton =
 function initializeApp() {
   // Initialize error handling
   initializeErrorHandling();
+
+  // Initialize global audio player (once, persists across navigation)
+  initPlayer();
 
   // Setup form listeners
   setupFormListeners();
@@ -932,6 +1020,13 @@ async function renderArtistDetail(artistId) {
         <p style="font-size:0.9rem;line-height:1.7;color:rgba(240,230,255,0.8)">${safe(a.bio)}</p>
       </div>` : ''}
 
+      ${a.trackUrl ? `
+      <div style="margin-bottom:1.5rem;text-align:center">
+        <button class="btn btn-primary" style="font-size:1rem;padding:0.65rem 1.5rem" onclick="playArtistTrack('${String(a.trackUrl).replace(/'/g, "\\'")}','${String(a.name).replace(/'/g, "\\'")}','${String(a.photo || '').replace(/'/g, "\\'")}')">
+          ${(PlayerState.trackUrl === a.trackUrl && PlayerState.isPlaying) ? '⏸ Pausar' : '▶ Escuchar set'}
+        </button>
+      </div>` : ''}
+
       ${socialLinks ? `
       <div class="section-header"><span class="section-title">Redes</span></div>
       <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.5rem">${socialLinks}</div>
@@ -1372,7 +1467,7 @@ async function adminEditArtist(artistId) {
 
   var artist = {
     id: null, name: '', role: '', genre: '', emoji: '🎧',
-    photo: '', bio: '', events: [], socials: { instagram: '', soundcloud: '', spotify: '' }
+    photo: '', bio: '', trackUrl: '', events: [], socials: { instagram: '', soundcloud: '', spotify: '' }
   };
   if (artistId) {
     var res = await window.DataSource.getArtist(artistId);
@@ -1423,6 +1518,13 @@ async function adminEditArtist(artistId) {
       </div>
 
       <div class="form-group">
+        <label>Track de muestra (MP3)</label>
+        ${artist.trackUrl ? `<audio controls src="${safe(artist.trackUrl)}" style="width:100%;margin-bottom:0.5rem"></audio>` : ''}
+        <input class="input" type="file" name="trackFile" accept="audio/*">
+        <input type="hidden" name="trackUrl" value="${safe(artist.trackUrl)}">
+      </div>
+
+      <div class="form-group">
         <label>Instagram</label>
         <input class="input" name="instagram" value="${safe(artist.socials.instagram || '')}" placeholder="https://instagram.com/...">
       </div>
@@ -1454,6 +1556,8 @@ async function adminSaveArtist(artistId, form) {
   var fd = new FormData(form);
   var photoFile = fd.get('photoFile');
   var photo = fd.get('photo') || '';
+  var trackFile = fd.get('trackFile');
+  var trackUrl = fd.get('trackUrl') || '';
 
   if (photoFile && photoFile.size > 0) {
     toast('📤 Subiendo foto...');
@@ -1465,6 +1569,16 @@ async function adminSaveArtist(artistId, form) {
     photo = up.data.url;
   }
 
+  if (trackFile && trackFile.size > 0) {
+    toast('📤 Subiendo track...');
+    var upTrack = await window.CloudinaryClient.uploadAudio(trackFile, 'paraiso-astral/tracks');
+    if (upTrack.status !== 'success') {
+      toast('❌ Error al subir track: ' + (upTrack.message || ''));
+      return;
+    }
+    trackUrl = upTrack.data.url;
+  }
+
   var payload = {
     name: fd.get('name') || '',
     role: fd.get('role') || '',
@@ -1472,6 +1586,7 @@ async function adminSaveArtist(artistId, form) {
     emoji: fd.get('emoji') || '🎧',
     photo: photo,
     bio: fd.get('bio') || '',
+    trackUrl: trackUrl,
     events: [],
     socials: {
       instagram: fd.get('instagram') || '',

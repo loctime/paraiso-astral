@@ -56,6 +56,7 @@ const ROOT_IMPORTANT_BASENAMES = new Set([
   ".gitignore",
   "dom-to-image-more.d.ts",
   "README.md",
+  "backend/prisma/seed.ts",
 ]);
 
 /** Al recorrer carpetas, no entrar en estos directorios */
@@ -69,6 +70,7 @@ const SKIP_DIR_NAMES = new Set([
   ".turbo",
   ".vercel",
   "migrations",
+  "backend/prisma",
 ]);
 
 /** Archivos o carpetas a incluir siempre además de lo anterior */
@@ -80,6 +82,7 @@ const EXTRA_PATHS = [
 const EXCLUDE_FILES = new Set([
   ".env",
   "backend/.env",
+  "backend/paraiso-astral-serviceAccount.json",
   // ej: "backend/config/secrets.json",
   // ej: "docs/private.md",
 ]);
