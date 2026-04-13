@@ -13,7 +13,7 @@
 (function () {
   'use strict';
 
-  var CLOUD_NAME = 'dbihuauip';
+  var CLOUD_NAME = 'dkwuebrur';
   var UPLOAD_PRESET = 'paraiso_astral';
 
   function ok(data) { return { status: 'success', data: data }; }
