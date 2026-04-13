@@ -46,7 +46,14 @@
       fd.append('file', file);
       fd.append('upload_preset', UPLOAD_PRESET);
       if (folder) fd.append('folder', folder);
-
+// AGREGAR ESTA LÍNEA para ver qué se envía:
+console.log('[Cloudinary] FormData contents:', {
+  file_name: file.name,
+  file_size: file.size,
+  file_type: file.type,
+  upload_preset: UPLOAD_PRESET,
+  folder: folder
+});
       var url = 'https://api.cloudinary.com/v1_1/' + CLOUD_NAME + '/image/upload';
       console.log('[Cloudinary] POST', url);
 
