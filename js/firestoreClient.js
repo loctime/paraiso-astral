@@ -47,7 +47,11 @@
       bio: d.bio || '',
       trackUrl: d.trackUrl || '',
       events: Array.isArray(d.events) ? d.events : [],
-      socials: d.socials || {}
+      socials: d.socials || {},
+      status: d.status || 'active',
+      slug: d.slug || '',
+      featured: typeof d.featured === 'boolean' ? d.featured : false,
+      tags: Array.isArray(d.tags) ? d.tags : []
     };
   }
 
@@ -150,7 +154,7 @@
     getArtists: async function () {
       if (!available()) return fail('Firestore no disponible');
       try {
-        var snap = await window.firebaseDb.collection('artists').orderBy('name', 'asc').get();
+        var snap = await window.firebaseDb.collection('artists').where('status', '==', 'active').orderBy('name', 'asc').get();
         var artists = [];
         snap.forEach(function (doc) {
           var a = docToArtist(doc);
@@ -178,6 +182,13 @@
       if (!available()) return fail('Firestore no disponible');
       try {
         var fsTs = firebase.firestore.FieldValue.serverTimestamp();
+        // Función para generar slug a partir del nombre
+        function generateSlug(name) {
+          if (!name) return '';
+          return name.toLowerCase()
+            .replace(/[^a-z0-9\s]/g, '')
+            .replace(/\s+/g, '');
+        }
         var payload = {
           name: data.name || '',
           role: data.role || '',
@@ -188,6 +199,10 @@
           trackUrl: data.trackUrl || '',
           events: Array.isArray(data.events) ? data.events : [],
           socials: data.socials || {},
+          status: data.status || 'active',
+          slug: data.slug || generateSlug(data.name),
+          featured: typeof data.featured === 'boolean' ? data.featured : false,
+          tags: Array.isArray(data.tags) ? data.tags : [],
           updatedAt: fsTs
         };
         var ref;

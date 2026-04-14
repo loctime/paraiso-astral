@@ -24,6 +24,7 @@ function initPlayer() {
   var audio = document.createElement('audio');
   audio.id = 'global-audio';
   audio.preload = 'none';
+  audio.volume = 0.5;
   document.body.appendChild(audio);
   PlayerState.element = audio;
 
