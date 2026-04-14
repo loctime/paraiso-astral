@@ -62,7 +62,7 @@
         tagline: '',
         bio: '',
         logo: '',
-        heroImage: 'public/banner.jpg',
+        heroImage: 'banner.jpg',
         contact: { email: '', whatsapp: '', phone: '' },
         socials: { instagram: '', facebook: '', soundcloud: '', spotify: '', youtube: '' }
       };
@@ -73,7 +73,7 @@
       tagline: d.tagline || '',
       bio: d.bio || '',
       logo: d.logo || '',
-      heroImage: d.heroImage || 'public/banner.jpg',
+      heroImage: d.heroImage || 'banner.jpg',
       contact: d.contact || { email: '', whatsapp: '', phone: '' },
       socials: d.socials || { instagram: '', facebook: '', soundcloud: '', spotify: '', youtube: '' }
     };

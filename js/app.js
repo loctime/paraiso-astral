@@ -1647,11 +1647,11 @@ function adminRenderConfigForm(cfg) {
         <h3 style="font-size:0.85rem;margin-bottom:0.75rem;color:var(--primary)">PRODUCTORA</h3>
         <div class="form-group">
           <label>Nombre</label>
-          <input class="input" name="name" value="${safe(cfg.name || 'Paraíso Astral')}">
+          <input class="input" name="name" value="${safe(cfg.name || '')}">
         </div>
         <div class="form-group">
           <label>Tagline</label>
-          <input class="input" name="tagline" value="${safe(cfg.tagline || 'Electronic Universe')}">
+          <input class="input" name="tagline" value="${safe(cfg.tagline || '')}">
         </div>
         <div class="form-group">
           <label>Bio corta</label>

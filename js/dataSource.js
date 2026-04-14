@@ -48,7 +48,7 @@
     tagline: '',
     bio: 'Productora de música electrónica.',
     logo: '',
-    heroImage: 'public/banner.jpg',
+    heroImage: 'banner.jpg',
     contact: { email: '', whatsapp: '', phone: '' },
     socials: { instagram: '', facebook: '', soundcloud: '', spotify: '', youtube: '' }
   };
