@@ -44,8 +44,8 @@
   ];
 
   var MOCK_SITE_CONFIG = {
-    name: 'Paraíso Astral',
-    tagline: 'Electronic Universe',
+    name: '',
+    tagline: '',
     bio: 'Productora de música electrónica.',
     logo: '',
     heroImage: 'public/banner.jpg',

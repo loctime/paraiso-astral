@@ -663,7 +663,7 @@ label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bo
   position: relative; border-radius: var(--radius-xl); overflow: hidden;
   margin-bottom: 1.5rem;
 }
-.hero-img { width: 100%; aspect-ratio: 4/5; object-fit: cover; display: block; }
+.hero-img { width: 100%; height: auto; object-fit: cover; display: block; }
 .hero-placeholder {
   width: 100%; aspect-ratio: 4/5;
   background: linear-gradient(135deg, #1a0820 0%, #3d0055 40%, #1a0820 100%);

@@ -58,8 +58,8 @@
   function docToConfig(doc) {
     if (!doc || !doc.exists) {
       return {
-        name: 'Paraíso Astral',
-        tagline: 'Electronic Universe',
+        name: '',
+        tagline: '',
         bio: '',
         logo: '',
         heroImage: 'public/banner.jpg',
@@ -69,8 +69,8 @@
     }
     var d = doc.data() || {};
     return {
-      name: d.name || 'Paraíso Astral',
-      tagline: d.tagline || 'Electronic Universe',
+      name: d.name || '',
+      tagline: d.tagline || '',
       bio: d.bio || '',
       logo: d.logo || '',
       heroImage: d.heroImage || 'public/banner.jpg',
