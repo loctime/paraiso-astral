@@ -82,8 +82,7 @@ console.log('[Cloudinary] FormData contents:', {
         console.error('[Cloudinary] excepción en fetch:', err);
         return fail(err && err.message);
       }
-    }
-  };
+    },
 
     /**
      * Sube un archivo de audio a Cloudinary y devuelve la URL segura.
