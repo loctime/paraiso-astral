@@ -16,6 +16,11 @@ var PlayerState = {
 };
 
 function initPlayer() {
+  // Inyectar keyframe para glow pulsante
+  var style = document.createElement('style');
+  style.textContent = '@keyframes player-glow{0%,100%{box-shadow:0 0 4px 1px rgba(209,37,244,0.4)}50%{box-shadow:0 0 12px 4px rgba(209,37,244,0.85)}}#header-player-avatar.playing{animation:player-glow 1.5s ease-in-out infinite}';
+  document.head.appendChild(style);
+
   var audio = document.createElement('audio');
   audio.id = 'global-audio';
   audio.preload = 'none';
@@ -26,18 +31,24 @@ function initPlayer() {
     PlayerState.isPlaying = true;
     var btn = document.getElementById('header-player-btn');
     if (btn) btn.textContent = '⏸';
+    var avatar = document.getElementById('header-player-avatar');
+    if (avatar) avatar.classList.add('playing');
   });
 
   audio.addEventListener('pause', function () {
     PlayerState.isPlaying = false;
     var btn = document.getElementById('header-player-btn');
     if (btn) btn.textContent = '▶';
+    var avatar = document.getElementById('header-player-avatar');
+    if (avatar) avatar.classList.remove('playing');
   });
 
   audio.addEventListener('ended', function () {
     PlayerState.isPlaying = false;
     var btn = document.getElementById('header-player-btn');
     if (btn) btn.textContent = '▶';
+    var avatar = document.getElementById('header-player-avatar');
+    if (avatar) avatar.classList.remove('playing');
   });
 }
 
@@ -67,6 +78,12 @@ function playArtistTrack(trackUrl, artistName, artistPhoto) {
       } else {
         avatar.innerHTML = '🎧';
       }
+    }
+
+    var nameEl = document.getElementById('header-player-name');
+    if (nameEl) {
+      var displayName = String(artistName || '');
+      nameEl.textContent = displayName.length > 10 ? displayName.slice(0, 10) + '...' : displayName;
     }
   }
 
