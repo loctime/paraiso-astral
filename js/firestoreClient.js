@@ -62,7 +62,7 @@
         tagline: 'Electronic Universe',
         bio: '',
         logo: '',
-        heroImage: '',
+        heroImage: 'public/banner.jpg',
         contact: { email: '', whatsapp: '', phone: '' },
         socials: { instagram: '', facebook: '', soundcloud: '', spotify: '', youtube: '' }
       };
@@ -73,7 +73,7 @@
       tagline: d.tagline || 'Electronic Universe',
       bio: d.bio || '',
       logo: d.logo || '',
-      heroImage: d.heroImage || '',
+      heroImage: d.heroImage || 'public/banner.jpg',
       contact: d.contact || { email: '', whatsapp: '', phone: '' },
       socials: d.socials || { instagram: '', facebook: '', soundcloud: '', spotify: '', youtube: '' }
     };

@@ -48,7 +48,7 @@
     tagline: 'Electronic Universe',
     bio: 'Productora de música electrónica.',
     logo: '',
-    heroImage: '',
+    heroImage: 'public/banner.jpg',
     contact: { email: '', whatsapp: '', phone: '' },
     socials: { instagram: '', facebook: '', soundcloud: '', spotify: '', youtube: '' }
   };
