@@ -79,8 +79,67 @@
     };
   }
 
+  // Listener con onSnapshot: primer emit viene del cache IndexedDB (instantáneo),
+  // después Firestore empuja cambios. Devuelve la función unsubscribe.
+  function subscribe(buildQuery, mapDoc, callback) {
+    if (!available()) {
+      callback({ status: 'error', data: null, message: 'Firestore no disponible' });
+      return function () {};
+    }
+    try {
+      var query = buildQuery();
+      return query.onSnapshot(
+        function (snap) {
+          var items = [];
+          if (snap.forEach) {
+            snap.forEach(function (doc) {
+              var item = mapDoc(doc);
+              if (item) items.push(item);
+            });
+            callback(ok(items));
+          } else {
+            // single doc
+            callback(ok(mapDoc(snap)));
+          }
+        },
+        function (err) {
+          console.warn('[FirestoreClient.subscribe]', err && err.message);
+          callback(fail(err && err.message));
+        }
+      );
+    } catch (err) {
+      callback(fail(err && err.message));
+      return function () {};
+    }
+  }
+
   var FirestoreClient = {
     isAvailable: available,
+
+    // ── Subscriptions (live + cache local) ─────────────────────────
+    subscribeEvents: function (callback) {
+      return subscribe(
+        function () { return window.firebaseDb.collection('events').orderBy('startAt', 'asc'); },
+        docToEvent,
+        callback
+      );
+    },
+
+    subscribeArtists: function (callback) {
+      return subscribe(
+        function () { return window.firebaseDb.collection('artists').where('status', '==', 'active').orderBy('name', 'asc'); },
+        docToArtist,
+        callback
+      );
+    },
+
+    subscribeSiteConfig: function (callback) {
+      return subscribe(
+        function () { return window.firebaseDb.collection('siteConfig').doc('main'); },
+        docToConfig,
+        callback
+      );
+    },
 
     // ── Events ─────────────────────────────────────────────────────
     getEvents: async function () {

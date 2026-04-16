@@ -1,19 +1,26 @@
 // ===== DATA SOURCE - PARAÍSO ASTRAL =====
-// Fuente única de datos para el frontend.
-// Estrategia: intenta Firestore primero; si falla (SDK no inicializado, rules, red)
-// cae a datos mock en memoria. Los renders no tienen que saber de dónde vienen los datos.
+// Store reactivo en memoria sobre Firestore.
 //
-// Contrato:
-//   DataSource.getEvents()             -> { status, data: Event[] }
-//   DataSource.getEvent(id)            -> { status, data: Event | null }
-//   DataSource.getArtists()            -> { status, data: Artist[] }
-//   DataSource.getArtist(id)           -> { status, data: Artist | null }
-//   DataSource.getSiteConfig()         -> { status, data: SiteConfig }
+// Ciclo de vida:
+//   1. DataSource.init() → abre 3 listeners onSnapshot (events, artists, siteConfig)
+//   2. Primer emit viene del cache IndexedDB (instantáneo, sin red) → llena el store
+//   3. Cada cambio remoto se propaga al store y notifica a suscriptores
+//   4. getEvents/getArtists/getSiteConfig leen del store → cero latencia
+//
+// Contrato público:
+//   DataSource.init()                       -> Promise<void>
+//   DataSource.getEvents()                  -> { status, data: Event[] }  (instantáneo si ya booteó)
+//   DataSource.getEvent(id)                 -> { status, data: Event | null }
+//   DataSource.getArtists()                 -> { status, data: Artist[] }
+//   DataSource.getArtist(id)                -> { status, data: Artist | null }
+//   DataSource.getSiteConfig()              -> { status, data: SiteConfig }
+//   DataSource.subscribe(name, callback)    -> unsubscribe fn
+//     name ∈ 'events' | 'artists' | 'siteConfig' | '*' (cualquier cambio)
 
 (function () {
   'use strict';
 
-  // ── Mock Events ──────────────────────────────────────────────────────────────
+  // ── Mocks (fallback si Firestore no está disponible) ────────────────────────
   var MOCK_EVENTS = [
     {
       id: 'evt-welcome',
@@ -56,81 +63,130 @@
   function ok(data) { return { status: 'success', data: data }; }
   function notFound() { return { status: 'error', data: null, message: 'Not found' }; }
 
-  // ¿Debemos intentar Firestore?
+  // ── Store interno ───────────────────────────────────────────────────────────
+  var store = {
+    events: null,      // null = aún no booteado
+    artists: null,
+    siteConfig: null
+  };
+
+  var subscribers = { events: [], artists: [], siteConfig: [], '*': [] };
+  var unsubs = [];
+  var initPromise = null;
+
+  function notify(name) {
+    (subscribers[name] || []).forEach(function (fn) { try { fn(); } catch (_) {} });
+    subscribers['*'].forEach(function (fn) { try { fn(name); } catch (_) {} });
+  }
+
   function firestoreReady() {
     return !!(window.FirestoreClient && window.FirestoreClient.isAvailable && window.FirestoreClient.isAvailable());
   }
 
-  // Helper: intenta Firestore; si falla o devuelve vacío, cae a mock.
-  // emptyIsValid = true → considerar lista vacía de Firestore como válida (no caer a mock).
-  async function withFirestoreFallback(firestoreFn, mockData, emptyIsValid) {
-    if (firestoreReady()) {
-      try {
-        var res = await firestoreFn();
-        if (res && res.status === 'success') {
-          // Lista vacía: si emptyIsValid, devolver vacío; si no, mostrar mock
-          if (Array.isArray(res.data) && res.data.length === 0 && !emptyIsValid) {
-            return ok(mockData);
-          }
-          return res;
-        }
-      } catch (err) {
-        console.warn('[DataSource] Firestore fallback → mock:', err && err.message);
+  // init() es idempotente: llamarlo varias veces no crea más listeners.
+  function init() {
+    if (initPromise) return initPromise;
+
+    initPromise = new Promise(function (resolve) {
+      if (!firestoreReady()) {
+        // Modo mock: llenar store una vez y resolver.
+        store.events = MOCK_EVENTS.slice();
+        store.artists = MOCK_ARTISTS.slice();
+        store.siteConfig = MOCK_SITE_CONFIG;
+        notify('events'); notify('artists'); notify('siteConfig');
+        resolve();
+        return;
       }
-    }
-    return ok(mockData);
+
+      var pending = 3;
+      function markReady() {
+        pending--;
+        if (pending === 0) resolve();
+      }
+
+      unsubs.push(window.FirestoreClient.subscribeEvents(function (res) {
+        if (res.status === 'success' && Array.isArray(res.data)) {
+          store.events = res.data.length ? res.data : MOCK_EVENTS.slice();
+        } else if (store.events === null) {
+          store.events = MOCK_EVENTS.slice();
+        }
+        notify('events');
+        if (pending > 0) markReady();
+      }));
+
+      unsubs.push(window.FirestoreClient.subscribeArtists(function (res) {
+        if (res.status === 'success' && Array.isArray(res.data)) {
+          store.artists = res.data.length ? res.data : MOCK_ARTISTS.slice();
+        } else if (store.artists === null) {
+          store.artists = MOCK_ARTISTS.slice();
+        }
+        notify('artists');
+        if (pending > 0) markReady();
+      }));
+
+      unsubs.push(window.FirestoreClient.subscribeSiteConfig(function (res) {
+        if (res.status === 'success' && res.data) {
+          store.siteConfig = res.data;
+        } else if (store.siteConfig === null) {
+          store.siteConfig = MOCK_SITE_CONFIG;
+        }
+        notify('siteConfig');
+        if (pending > 0) markReady();
+      }));
+
+      // Safety: si en 3s no llegó nada, resolver igual para que la UI renderice con mocks.
+      setTimeout(function () {
+        if (store.events === null) store.events = MOCK_EVENTS.slice();
+        if (store.artists === null) store.artists = MOCK_ARTISTS.slice();
+        if (store.siteConfig === null) store.siteConfig = MOCK_SITE_CONFIG;
+        if (pending > 0) { pending = 0; resolve(); }
+      }, 3000);
+    });
+
+    return initPromise;
+  }
+
+  function subscribe(name, callback) {
+    if (!subscribers[name]) return function () {};
+    subscribers[name].push(callback);
+    return function () {
+      var arr = subscribers[name];
+      var i = arr.indexOf(callback);
+      if (i >= 0) arr.splice(i, 1);
+    };
   }
 
   var DataSource = {
-    // Events
+    init: init,
+    subscribe: subscribe,
+
     getEvents: async function () {
-      return withFirestoreFallback(
-        function () { return window.FirestoreClient.getEvents(); },
-        MOCK_EVENTS.slice(),
-        false // lista vacía → mostrar mock ("próximamente")
-      );
+      await init();
+      return ok((store.events || MOCK_EVENTS).slice());
     },
 
     getEvent: async function (id) {
-      if (firestoreReady()) {
-        try {
-          var res = await window.FirestoreClient.getEvent(id);
-          if (res && res.status === 'success') return res;
-        } catch (_) {}
-      }
-      var e = MOCK_EVENTS.find(function (x) { return String(x.id) === String(id); });
+      await init();
+      var list = store.events || MOCK_EVENTS;
+      var e = list.find(function (x) { return String(x.id) === String(id); });
       return e ? ok(e) : notFound();
     },
 
-    // Artists
     getArtists: async function () {
-      return withFirestoreFallback(
-        function () { return window.FirestoreClient.getArtists(); },
-        MOCK_ARTISTS.slice(),
-        false
-      );
+      await init();
+      return ok((store.artists || MOCK_ARTISTS).slice());
     },
 
     getArtist: async function (id) {
-      if (firestoreReady()) {
-        try {
-          var res = await window.FirestoreClient.getArtist(id);
-          if (res && res.status === 'success') return res;
-        } catch (_) {}
-      }
-      var a = MOCK_ARTISTS.find(function (x) { return String(x.id) === String(id); });
+      await init();
+      var list = store.artists || MOCK_ARTISTS;
+      var a = list.find(function (x) { return String(x.id) === String(id); });
       return a ? ok(a) : notFound();
     },
 
-    // Site config
     getSiteConfig: async function () {
-      if (firestoreReady()) {
-        try {
-          var res = await window.FirestoreClient.getSiteConfig();
-          if (res && res.status === 'success' && res.data) return res;
-        } catch (_) {}
-      }
-      return ok(MOCK_SITE_CONFIG);
+      await init();
+      return ok(store.siteConfig || MOCK_SITE_CONFIG);
     }
   };
 

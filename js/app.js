@@ -182,6 +182,8 @@ function navigate(pageId, data) {
   if (pageId === 'artists') { renderArtists(); }
   if (pageId === 'contact') { renderContact(); }
   if (pageId === 'admin') { renderAdmin(); }
+
+  AppState.currentPage = pageId;
 }
 
 // ── ERROR HANDLING ──────────────────────────────────────────────────────────────────
@@ -289,6 +291,30 @@ function initializeApp() {
   // Solo /admin pide login (lo maneja navigate() con canAccessRoute).
   AppState.currentUser = null;
 
+  // Boot del store reactivo: abre listeners onSnapshot para events/artists/siteConfig.
+  // Primer emit llega del cache IndexedDB (instantáneo en visitas recurrentes).
+  if (window.DataSource && window.DataSource.init) {
+    window.DataSource.init();
+
+    // Re-render automático cuando el store cambia y el usuario está en una página
+    // que depende de esos datos. Admin y detalles se actualizan solos vía getters.
+    window.DataSource.subscribe('*', function (name) {
+      var page = AppState.currentPage;
+      if (page === 'home') { renderHome(); return; }
+      if (page === 'events' && name === 'events') { renderEvents(); return; }
+      if (page === 'artists' && name === 'artists') { renderArtists(); return; }
+    });
+  }
+
+  // Service worker: app shell offline + cache de Cloudinary.
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function (err) {
+        console.warn('[SW] register failed:', err && err.message);
+      });
+    });
+  }
+
   setTimeout(function () {
     var hash = window.location.hash.slice(1);
     if (hash) {
@@ -377,16 +403,12 @@ async function renderHome() {
     const safe = escapeHtml;
 
     const heroStyle = cfg.heroImage
-      ? 'background-image:linear-gradient(180deg,rgba(10,0,20,0.35),rgba(10,0,20,0.85)),url(' + String(cfg.heroImage).replace(/"/g, '') + ');background-size:cover;background-position:center'
+      ? 'background-image:url(' + String(cfg.heroImage).replace(/"/g, '') + ');background-size:cover;background-position:center'
       : 'background:linear-gradient(135deg,#1a0820,#2d0040 50%,#0a0012)';
 
     content.innerHTML = `
       <!-- HERO -->
-      <div class="hero" style="${heroStyle};border-radius:var(--radius-lg);padding:2.5rem 1rem;margin-bottom:1.5rem;text-align:center;border:1px solid var(--border);overflow:hidden">
-        <div style="font-size:3rem;margin-bottom:0.5rem">🌌</div>
-        <h1 style="font-family:var(--font-display);font-size:clamp(1.1rem, 5.5vw, 1.75rem);font-weight:900;margin:0;letter-spacing:0;line-height:1.15;word-break:break-word;overflow-wrap:break-word;max-width:100%">${safe(cfg.name || 'PARAÍSO ASTRAL')}</h1>
-        <p style="color:var(--text-muted);margin:0.5rem 0 0;font-size:0.95rem">${safe(cfg.tagline || 'Electronic Universe')}</p>
-        ${cfg.bio ? `<p style="color:var(--text-muted);margin:1rem auto 0;font-size:0.85rem;max-width:480px">${safe(cfg.bio)}</p>` : ''}
+      <div class="hero" style="${heroStyle};border-radius:var(--radius-lg);margin-bottom:1.5rem;border:1px solid var(--border);overflow:hidden">
       </div>
 
       <!-- FEATURED EVENT -->

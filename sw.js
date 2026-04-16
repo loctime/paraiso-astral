@@ -1,15 +1,14 @@
 // ===== SERVICE WORKER - PARAÍSO ASTRAL =====
-// Minimal service worker. Precachea el app shell y usa network-first para HTML
-// (así los cambios se ven rápido) + cache-first para CSS/JS (para que la primera
-// carga offline funcione).
-//
-// NOTA: Esta SW existe pero NO se registra desde index.html por ahora. Si querés
-// habilitar PWA/offline real, agregá esto al final de app.js:
-//   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+// Precachea el app shell. Estrategias:
+//   - HTML/navigate: network-first (ver cambios rápido) con fallback a cache.
+//   - CSS/JS/iconos: cache-first.
+//   - Cloudinary (imágenes de eventos/artistas/banner): stale-while-revalidate.
+// Firestore no se cachea acá: Firebase SDK ya usa IndexedDB internamente.
 
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const APP_SHELL_CACHE = 'paraiso-shell-' + CACHE_VERSION;
 const RUNTIME_CACHE = 'paraiso-runtime-' + CACHE_VERSION;
+const IMAGE_CACHE = 'paraiso-images-' + CACHE_VERSION;
 
 // App Shell — archivos estáticos siempre disponibles offline.
 const APP_SHELL_FILES = [
@@ -44,7 +43,7 @@ self.addEventListener('activate', function (event) {
       .then(function (keys) {
         return Promise.all(
           keys
-            .filter(function (k) { return k !== APP_SHELL_CACHE && k !== RUNTIME_CACHE; })
+            .filter(function (k) { return k !== APP_SHELL_CACHE && k !== RUNTIME_CACHE && k !== IMAGE_CACHE; })
             .map(function (k) { return caches.delete(k); })
         );
       })
@@ -57,10 +56,26 @@ self.addEventListener('fetch', function (event) {
   var request = event.request;
   var url = new URL(request.url);
 
-  // Solo manejamos GET del mismo origen.
-  if (request.method !== 'GET' || url.origin !== self.location.origin) {
+  if (request.method !== 'GET') return;
+
+  // Cloudinary: stale-while-revalidate (mostramos cache al toque, actualizamos atrás).
+  if (url.hostname === 'res.cloudinary.com') {
+    event.respondWith(
+      caches.open(IMAGE_CACHE).then(function (cache) {
+        return cache.match(request).then(function (cached) {
+          var networkFetch = fetch(request).then(function (res) {
+            if (res && res.ok) cache.put(request, res.clone());
+            return res;
+          }).catch(function () { return cached; });
+          return cached || networkFetch;
+        });
+      })
+    );
     return;
   }
+
+  // Resto de cross-origin (Firebase SDKs, Firestore): que pase directo a red.
+  if (url.origin !== self.location.origin) return;
 
   // Navegación / HTML → network-first con fallback a cache (y a /index.html).
   if (request.mode === 'navigate' || (request.headers.get('accept') || '').indexOf('text/html') !== -1) {
@@ -97,5 +112,21 @@ self.addEventListener('fetch', function (event) {
     return;
   }
 
-  // Resto (Firestore, Cloudinary, Firebase SDKs) → network directo, sin cachear.
+  // Imágenes locales (/banner.jpg y otras en raíz) → stale-while-revalidate.
+  if (/\.(jpg|jpeg|png|webp|gif|svg)$/i.test(url.pathname)) {
+    event.respondWith(
+      caches.open(IMAGE_CACHE).then(function (cache) {
+        return cache.match(request).then(function (cached) {
+          var networkFetch = fetch(request).then(function (res) {
+            if (res && res.ok) cache.put(request, res.clone());
+            return res;
+          }).catch(function () { return cached; });
+          return cached || networkFetch;
+        });
+      })
+    );
+    return;
+  }
+
+  // Resto del mismo origen → network directo.
 });

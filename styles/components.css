@@ -186,8 +186,6 @@ label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bo
 .empty-title { font-weight: 700; margin-bottom: 0.3rem; }
 
 /* ===== ANIMATIONS ===== */
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.fade-in { animation: fadeIn 0.4s ease; }
 @keyframes glow-pulse { 0%,100% { box-shadow: 0 0 8px var(--primary-glow); } 50% { box-shadow: 0 0 20px var(--primary-glow); } }
 
 /* ===== MISC ===== */
@@ -662,6 +660,8 @@ label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bo
 .hero {
   position: relative; border-radius: var(--radius-xl); overflow: hidden;
   margin-bottom: 1.5rem;
+  width: 100%;
+  aspect-ratio: 3 / 1;
 }
 .hero-img { width: 100%; height: auto; object-fit: cover; display: block; }
 .hero-placeholder {

@@ -23,6 +23,15 @@
     window.firebaseAuth = firebase.auth(app);
     if (firebase.firestore) {
       window.firebaseDb = firebase.firestore(app);
+      // IndexedDB persistence: lecturas instantáneas en visitas recurrentes,
+      // y fallback offline. synchronizeTabs evita conflicto con varias pestañas.
+      window.firebaseDb.enablePersistence({ synchronizeTabs: true }).catch(function (err) {
+        // failed-precondition = ya hay otra pestaña, unimplemented = navegador no soporta.
+        // En ambos casos la app sigue funcionando sin cache local.
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[Firebase] persistence off:', err && err.code);
+        }
+      });
     }
   } catch (e) {
     if (typeof console !== 'undefined' && console.warn) {
